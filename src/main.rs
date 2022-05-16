@@ -1,6 +1,3 @@
-// TODO:
-// Define pattern-matching concepts - like regexp for (GME) graphs
-
 #[derive(Clone, Eq, Hash)]
 enum Element {
     Node(Node),
