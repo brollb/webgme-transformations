@@ -1,148 +1,124 @@
-#[derive(Clone, Eq, Hash)]
-enum Element {
-    Node(Node),
-    Primitive(Primitive),
-    Attribute(Attribute),
+mod gme;
+mod pattern;
+
+use std::{collections::HashMap, rc::Rc};
+
+use pattern::{Element, Node, Pattern, Relation};
+
+fn is_valid_element(node: &gme::Node, element: &Element) -> bool {
+    match element {
+        Element::Node(Node::ActiveNode) => node.is_active,
+        Element::Node(_) => true,
+        _ => todo!("attributes, primitives are not yet first class!"),
+    }
+}
+//
+type ElementIndex = usize;
+fn select_next_element() -> ElementIndex {
+    todo!();
 }
 
-#[derive(Clone)]
-struct Attribute;
-
-#[derive(Clone)]
-enum Node {
-    ActiveNode, // TODO: Decompose this further?
-    AnyNode,
+fn candidates_for() -> Vec<gme::Node> {
+    todo!();
 }
 
-#[derive(Clone)]
-enum Primitive {
-    Property,
-    Constant, // TODO: everything else needs to be bound
+// fn () -> Vec<String> {
+//     todo!();
+// }
+
+#[derive(Debug)]
+pub struct Assignment {
+    matches: HashMap<Element, gme::Node>,
 }
 
-#[derive(Clone)] // TODO: should these be btwn indices instead?
-enum Relation<'a> {
-    ChildOf(&'a Node, &'a Node),         // btwn nodes
-    With(&'a Node, &'a Attribute),       // 2 values/attrs
-    Equal(&'a Primitive, &'a Primitive), // btwn nodes or values
-}
-
-struct Pattern<'a> {
-    elements: &'a [Element],
-    relations: Vec<Relation<'a>>,
-}
-
-impl Pattern<'_> {
-    // TODO: the relations should only reference things in the elements vector..
-    pub fn new(elements: Vec<Element>, relations: Vec<Relation>) -> Self {
-        Pattern {
-            elements,
-            relations,
+impl Assignment {
+    pub fn new() -> Self {
+        Assignment {
+            matches: HashMap::new(),
         }
     }
 
-    // TODO: return an iterator over the assignments
-    pub fn find_matches(&self, nodes: Vec<GraphNode>) {
-        let assignment: HashMap<Element, GraphNode> = HashMap::new();
-        let assignments = vec![assignment];
-
-        self.get_assignments(HashMap::new(), 0, nodes)
-
-        // for element in self.elements {
-        //     for node in nodes {
-        //         todo!();
-        //     }
-        // } // FIXME: DFS would be better
-
-        // TODO: find assignments for each of the elements
-        // TODO: for each element:
-        // TODO:   - select an (unused) assignment that satisfies the relations/implicit constraints
-        // TODO:   - recurse with the new partial assignment
-    }
-
-    fn get_assignments(
-        self,
-        partial_match: HashMap<Element, GraphNode>,
-        index: usize,
-        nodes: &[Node],
-    ) -> Vec<HashMap<Element, GraphNode>> {
-        let mut assignments = Vec::new();
-        if let Some(element) = self.elements.get(index) {
-            // TODO: return partial matches with all assignments for this element
-            for node in nodes {
-                // TODO: remove extra copies
-                if self.is_valid_assignment(element, node, partial_match) {
-                    let next_match = partial_match.clone();
-                    next_match.insert(element, node);
-                    // TODO: get a slice that doesn't contain the current node...
-                    let remaining_nodes = nodes.split_at()
-                    assignments.append(&mut self.get_assignments(next_match, index + 1, nodes));
-                }
-            }
-        } else if partial_match.len() == self.elements.len() {
-            assignments.push(partial_match);
-        }
-        assignments
-    }
-
-    // TODO: add a find_one fn (using BFS order?)
-    fn is_valid_assignment(
-        &self,
-        element: Element,
-        node: GraphNode,
-        partial_match: HashMap<Element, GraphNode>,
-    ) -> bool {
-        // TODO: get all the relations using element and make sure they are valid
-        let constraints = self.relations.iter();
-        //.filter(|rel| )
-
-        constraints.fold(true, |is_valid, constraint| is_valid && constraint.validate)
-    }
-
-    fn assign(
-        self,
-        partial_match: HashMap<Element, GraphNode>,
-        element: &Element,
-        nodes: &Vec<Node>,
-    ) -> Option<Node> {
-        // TODO: Find a valid assignment for "element"
+    pub fn with(&self, element: Element, node: gme::Node) -> Self {
+        let mut matches = self.matches.clone();
+        matches.insert(element, node);
+        Self { matches }
     }
 }
 
-struct PatternMatch {}
+pub fn find_assignments(node: &gme::Node, pattern: &Pattern) -> Vec<Assignment> {
+    let remaining_elements = pattern.reference_elements();
+    add_match_to_assignment(node, pattern, Assignment::new(), remaining_elements)
+}
 
-impl PatternMatch {
-    fn assign(self, element: &Element, nodes: &Vec<Node>) -> Option<Node> {
-        // TODO: find a node that satisfies all the constraints of "element"
-        todo!();
+fn add_match_to_assignment(
+    node: &gme::Node,
+    pattern: &Pattern,
+    partial_assignment: Assignment,
+    mut remaining_elements: Vec<&Element>,
+) -> Vec<Assignment> {
+    // algorithm for finding all assignments:
+    let assignments: Vec<_> = Vec::new();
+
+    //  - if no more nodes to assign, return [assignment]
+    if remaining_elements.len() == 0 {
+        return vec![partial_assignment];
     }
+
+    //  - select an unassigned pattern element: (most connections to resolved nodes?)
+    let idx = select_next_element();
+    let element = remaining_elements.swap_remove(idx);
+
+    //    - for each candidate for the pattern element:
+    let candidates = candidates_for();
+
+    //      - create a new assignment with the candidate and recurse
+    for candidate in candidates {
+        let new_assignment = partial_assignment.with(element.clone(), candidate);
+        // TODO: check if we have more assignments to make...
+        add_match_to_assignment(node, pattern, new_assignment, remaining_elements.clone());
+        //      - concat all the valid assignments
+    }
+
+    //    - return all assignments
+    assignments
 }
-
-#[derive(Clone)]
-struct GraphNode {
-    id: String,
-    types: Vec<String>,
-    is_active: bool,
-    attributes: HashMap<String, String>,
-    pointers: HashMap<String, String>,
-    children: Vec<GraphNode>,
-}
-
-// TODO: given a pattern, can we match the occurrences in the graph?
-// How should we try to match them? For now, let's just take the simple approach and try to
-// perform exhaustive search
-
-use std::collections::HashMap;
 
 fn main() {
-    // TODO: Create an example pattern and try to match against a simple example
+    // Create the pattern
     let active_node = Node::ActiveNode;
     let node = Node::AnyNode;
     let edge = Relation::ChildOf(&active_node, &node);
+    let pattern = Pattern::new(
+        vec![
+            pattern::Element::Node(active_node),
+            pattern::Element::Node(node),
+        ],
+        vec![edge],
+    );
 
-    let mut elements = Vec::new();
-    elements.push(Element::Node(active_node));
+    // Create the GME node
+    let child = gme::Node {
+        id: String::from("/a/d/child"),
+        base: None,
+        is_active: true,
+        is_meta: false,
+        attributes: HashMap::new(),
+        pointers: HashMap::new(),
+        sets: HashMap::new(),
+        children: Vec::new(),
+    };
+    let gme_node = gme::Node {
+        id: String::from("/a/d"),
+        base: None,
+        is_active: true,
+        is_meta: false,
+        attributes: HashMap::new(),
+        pointers: HashMap::new(),
+        sets: HashMap::new(),
+        children: vec![Rc::new(child)],
+    };
 
-    let pattern = Pattern::new(elements, vec![edge]);
-    println!("Hello, world!");
+    let assignments = find_assignments(&gme_node, &pattern);
+    println!("{:?}", assignments);
+    assert_eq!(assignments.len(), 1);
 }
