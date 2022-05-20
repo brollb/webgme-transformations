@@ -1,3 +1,4 @@
+mod core;
 mod gme;
 mod pattern;
 

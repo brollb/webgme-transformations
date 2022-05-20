@@ -1,14 +1,19 @@
 use petgraph::graph::{Graph, NodeIndex};
 
+use crate::core::Primitive;
+
 #[derive(Clone, Eq, Hash, PartialEq, Debug)]
 pub enum Element {
     Node(Node),
-    Primitive(Primitive),
-    Attribute(Attribute),
+    Constant(Primitive), // TODO: everything else needs to be bound
+    Attribute,
 }
 
 #[derive(Clone, Eq, Hash, PartialEq, Debug)]
-pub struct Attribute;
+pub enum Property {
+    Name,
+    Value,
+}
 
 #[derive(Clone, Eq, Hash, PartialEq, Debug)]
 pub enum Node {
@@ -23,23 +28,15 @@ impl From<Node> for Element {
 }
 
 #[derive(Clone, Eq, Hash, PartialEq, Debug)]
-pub enum Primitive {
-    Property,
-    Constant, // TODO: everything else needs to be bound
-}
-
-// These cant be rc since they can have a loop
-#[derive(Clone, Eq, Hash, PartialEq, Debug)]
 pub enum Relation {
-    ChildOf, // btwn nodes
-    With,    // 2 values/attrs
-    Equal,   // btwn nodes or values
-    AreSame,
+    ChildOf,                  // btwn nodes
+    Has,                      // btwn node and attribute
+    With(Property, Property), // 2 attributes or constants
+    Equal,
 }
 
 pub struct Pattern {
     pub graph: Graph<Element, Relation>,
-    // elements: Vec<Element>,
 }
 
 impl Pattern {
@@ -51,7 +48,7 @@ impl Pattern {
         self.graph
             .node_indices()
             .filter_map(|id| match self.graph[id] {
-                Element::Primitive(Primitive::Constant) => None,
+                Element::Constant(_) => None,
                 _ => Some(id),
             })
             .collect()

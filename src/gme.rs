@@ -3,6 +3,8 @@ use std::hash::Hash;
 use std::rc::Weak;
 use std::{collections::HashMap, hash::Hasher, rc::Rc};
 
+use crate::core::Primitive;
+
 #[derive(Clone, Debug)]
 pub struct AttributeName(String);
 #[derive(Clone, Debug)]
@@ -36,9 +38,4 @@ impl Hash for Node {
 }
 
 #[derive(Clone, Debug)]
-pub enum Attribute {
-    String(String),
-    Boolean(bool),
-    Number(f32),
-    // TODO: etc
-}
+pub struct Attribute(Primitive);
