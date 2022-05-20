@@ -1,4 +1,4 @@
-use petgraph::graph::Graph;
+use petgraph::graph::{Graph, NodeIndex};
 
 #[derive(Clone, Eq, Hash, PartialEq, Debug)]
 pub enum Element {
@@ -38,7 +38,7 @@ pub enum Relation {
 }
 
 pub struct Pattern {
-    graph: Graph<Element, Relation>,
+    pub graph: Graph<Element, Relation>,
     // elements: Vec<Element>,
 }
 
@@ -46,29 +46,17 @@ impl Pattern {
     pub fn new(graph: Graph<Element, Relation>) -> Self {
         Pattern { graph }
     }
-    // pub fn new(elements: Vec<Element>, relations: Vec<Relation<'a>>) -> Self {
-    //     let graph = Graph::with_capacity(elements.len(), relations.len());
-    //     elements.into_iter().map(|e| graph.add_node(e)).collect()
-    //     // TODO: add all the elements
-    //     Pattern { elements, graph }
-    // }
 
-    pub fn reference_elements(&self) -> Vec<&Element> {
+    pub fn reference_elements(&self) -> Vec<NodeIndex> {
         self.graph
             .node_indices()
             .filter_map(|id| match self.graph[id] {
                 Element::Primitive(Primitive::Constant) => None,
-                _ => Some(&self.graph[id]),
+                _ => Some(id),
             })
             .collect()
     }
 }
-
-// impl Pattern {
-//     pub fn new(graph: Graph<Element, Relation>) -> Self {
-//         Pattern { graph }
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

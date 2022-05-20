@@ -4,6 +4,7 @@ mod pattern;
 use std::collections::HashMap;
 
 use pattern::{Element, Node, Pattern};
+use petgraph::graph::NodeIndex;
 
 fn is_valid_element(node: &gme::Node, element: &Element) -> bool {
     match element {
@@ -17,35 +18,51 @@ type ElementIndex = usize;
 fn select_next_element(
     _pattern: &Pattern,
     _assignment: &Assignment,
-    _remaining_elements: &Vec<&Element>,
+    _remaining_elements: &Vec<NodeIndex>,
 ) -> ElementIndex {
     // TODO: Find the element with the most connections to assigned elements
+    //_pattern.graph.index_twice_mut
     0
 }
 
 fn candidates_for<'a>(
     node: &'a gme::Node,
+    pattern: &Pattern,
     assignment: &Assignment,
-    element: &Element,
+    element_idx: &NodeIndex,
 ) -> Vec<&'a gme::Node> {
     // Find all the valid candidates for the given node
     // TODO: Optimize this to prioritize child relations, etc
 
     let mut nodes = Vec::new();
+    // TODO: Find the candidates more intelligently
+    // TODO: Check if we have a ChildOf constraint (w/ an assigned parent)
+
+    // First, we need to select based on the type (Node, Attribute, Property, etc)
+    // If we have a ChildOf constraint, load the children only
+    //    - else load all nodes (not great)
+    // after we retrieve our initial set, then filter using the existing constraints
+
+    let element = pattern.graph.node_weight(element_idx.clone()).expect("");
     if is_valid_element(node, element) && !assignment.has_node(node) {
         nodes.push(node);
     }
 
     for child in &node.children {
         let child_ref = &*child;
-        nodes.append(&mut candidates_for(child_ref, assignment, element));
+        nodes.append(&mut candidates_for(
+            child_ref,
+            pattern,
+            assignment,
+            element_idx,
+        ));
     }
     nodes
 }
 
 #[derive(Debug)]
 pub struct Assignment<'a> {
-    pub matches: HashMap<Element, &'a gme::Node>,
+    pub matches: HashMap<NodeIndex, &'a gme::Node>,
 }
 
 impl<'a> Assignment<'a> {
@@ -55,7 +72,7 @@ impl<'a> Assignment<'a> {
         }
     }
 
-    pub fn with(&self, element: Element, node: &'a gme::Node) -> Self {
+    pub fn with(&self, element: NodeIndex, node: &'a gme::Node) -> Self {
         let mut matches = self.matches.clone();
         matches.insert(element, node);
         Self { matches }
@@ -75,7 +92,7 @@ fn add_match_to_assignment<'a>(
     node: &'a gme::Node,
     pattern: &Pattern,
     partial_assignment: Assignment<'a>,
-    mut remaining_elements: Vec<&Element>,
+    mut remaining_elements: Vec<NodeIndex>,
 ) -> Vec<Assignment<'a>> {
     // algorithm for finding all assignments:
     let mut assignments: Vec<_> = Vec::new();
@@ -87,16 +104,21 @@ fn add_match_to_assignment<'a>(
 
     //  - select an unassigned pattern element: (most connections to resolved nodes?)
     let idx = select_next_element(pattern, &partial_assignment, &remaining_elements);
-    let element = remaining_elements.swap_remove(idx);
+    let element_idx = remaining_elements.swap_remove(idx);
+    //let element = pattern.graph.
 
     //    - for each candidate for the pattern element:
-    let candidates = candidates_for(node, &partial_assignment, &element);
-    println!("Found {} candidates for {:?}", candidates.len(), element);
+    let candidates = candidates_for(node, pattern, &partial_assignment, &element_idx);
+    println!(
+        "Found {} candidates for {:?}",
+        candidates.len(),
+        element_idx
+    );
 
     //      - create a new assignment with the candidate and recurse
     for candidate in candidates {
-        println!("assigning {:?} to {:?}", element, candidate);
-        let new_assignment = partial_assignment.with(element.clone(), candidate);
+        //println!("assigning {:?} to {:?}", element, candidate);
+        let new_assignment = partial_assignment.with(element_idx, candidate);
         assignments.append(&mut add_match_to_assignment(
             node,
             pattern,
@@ -160,7 +182,7 @@ mod tests {
         let assignment = assignments.get(0).unwrap();
         let active_match = assignment
             .matches
-            .get(&Element::Node(Node::ActiveNode))
+            .get(&active_node)
             .expect("Could not find match for active node");
         assert_eq!(gme_node, **active_match);
     }
