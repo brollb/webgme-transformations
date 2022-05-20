@@ -2,8 +2,9 @@ mod core;
 mod gme;
 mod pattern;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
+use gme::{AttributeName, PointerName, SetName};
 use pattern::{Element, Node, Pattern};
 use petgraph::graph::NodeIndex;
 
@@ -61,30 +62,50 @@ fn candidates_for<'a>(
     nodes
 }
 
-#[derive(Debug)]
-pub struct Assignment<'a> {
-    pub matches: HashMap<NodeIndex, &'a gme::Node>,
+#[derive(Debug, Clone)]
+pub enum Reference {
+    Node(String), // TODO: should we just use Node IDs instead? A reference would probably be more efficient
+    Attribute(Rc<gme::Node>, AttributeName),
+    Pointer(Rc<gme::Node>, PointerName),
+    Set(Rc<gme::Node>, SetName),
 }
 
-impl<'a> Assignment<'a> {
+impl Reference {
+    fn is_node_ref(&self, node: &gme::Node) -> bool {
+        match self {
+            Reference::Node(id) => node.id == *id,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Assignment {
+    pub matches: HashMap<NodeIndex, Reference>,
+}
+
+impl Assignment {
     pub fn new() -> Self {
         Assignment {
             matches: HashMap::new(),
         }
     }
 
-    pub fn with(&self, element: NodeIndex, node: &'a gme::Node) -> Self {
+    pub fn with(&self, element: NodeIndex, node: &gme::Node) -> Self {
         let mut matches = self.matches.clone();
-        matches.insert(element, node);
+        matches.insert(element, Reference::Node(node.id.clone()));
         Self { matches }
     }
 
     pub fn has_node(&self, node: &gme::Node) -> bool {
-        self.matches.values().find(|n| **n == node).is_some()
+        self.matches
+            .values()
+            .find(|reference| reference.is_node_ref(node))
+            .is_some()
     }
 }
 
-pub fn find_assignments<'a>(node: &'a gme::Node, pattern: &Pattern) -> Vec<Assignment<'a>> {
+pub fn find_assignments(node: &gme::Node, pattern: &Pattern) -> Vec<Assignment> {
     let remaining_elements = pattern.reference_elements();
     add_match_to_assignment(node, pattern, Assignment::new(), remaining_elements)
 }
@@ -92,9 +113,9 @@ pub fn find_assignments<'a>(node: &'a gme::Node, pattern: &Pattern) -> Vec<Assig
 fn add_match_to_assignment<'a>(
     node: &'a gme::Node,
     pattern: &Pattern,
-    partial_assignment: Assignment<'a>,
+    partial_assignment: Assignment,
     mut remaining_elements: Vec<NodeIndex>,
-) -> Vec<Assignment<'a>> {
+) -> Vec<Assignment> {
     // algorithm for finding all assignments:
     let mut assignments: Vec<_> = Vec::new();
 
@@ -185,7 +206,11 @@ mod tests {
             .matches
             .get(&active_node)
             .expect("Could not find match for active node");
-        assert_eq!(gme_node, **active_match);
+
+        match active_match {
+            Reference::Node(id) => assert_eq!(gme_node.id, *id),
+            _ => panic!("Did not match active node to a node!"),
+        }
     }
 
     // #[test]
@@ -261,7 +286,7 @@ mod tests {
         for assignment in &assignments {
             println!("assignment:");
             assignment.matches.iter().for_each(|(element, node)| {
-                println!("\t{:?} - {}", element, node.id);
+                println!("\t{:?} - {:?}", element, node);
             })
         }
         assert_eq!(assignments.len(), 1);
