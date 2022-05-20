@@ -24,18 +24,6 @@ fn select_next_element(
     0
 }
 
-fn all_nodes(node: &gme::Node) -> Vec<&gme::Node> {
-    let mut nodes = Vec::new();
-    let mut next_nodes = vec![node];
-    while next_nodes.len() > 0 {
-        let next_next_nodes = next_nodes.iter().flat_map(|n| n.children.iter()).collect();
-        nodes.append(&mut next_nodes);
-        next_nodes = next_next_nodes;
-    }
-
-    todo!();
-}
-
 fn candidates_for<'a>(
     node: &'a gme::Node,
     assignment: &Assignment,
@@ -43,11 +31,18 @@ fn candidates_for<'a>(
 ) -> Vec<&'a gme::Node> {
     // Find all the valid candidates for the given node
     // TODO: Optimize this to prioritize child relations, etc
-    let nodes = all_nodes(node);
+
+    // TODO: remove nodes already assigned
+    let mut nodes = Vec::new();
+    if is_valid_element(node, element) && !assignment.has_node(node) {
+        nodes.push(node);
+    }
+
+    for child in &node.children {
+        let child_ref = &*child;
+        nodes.append(&mut candidates_for(child_ref, assignment, element));
+    }
     nodes
-        .into_iter()
-        .filter(|node| is_valid_element(node, element))
-        .collect()
 }
 
 #[derive(Debug)]
@@ -67,6 +62,10 @@ impl<'a> Assignment<'a> {
         matches.insert(element, node);
         Self { matches }
     }
+
+    pub fn has_node(&self, node: &gme::Node) -> bool {
+        self.matches.values().find(|n| **n == node).is_some()
+    }
 }
 
 pub fn find_assignments<'a>(node: &'a gme::Node, pattern: &Pattern) -> Vec<Assignment<'a>> {
@@ -81,10 +80,11 @@ fn add_match_to_assignment<'a>(
     mut remaining_elements: Vec<&Element>,
 ) -> Vec<Assignment<'a>> {
     // algorithm for finding all assignments:
-    let assignments: Vec<_> = Vec::new();
+    let mut assignments: Vec<_> = Vec::new();
 
     //  - if no more nodes to assign, return [assignment]
     if remaining_elements.len() == 0 {
+        println!("adding partial assignment");
         return vec![partial_assignment];
     }
 
@@ -94,12 +94,19 @@ fn add_match_to_assignment<'a>(
 
     //    - for each candidate for the pattern element:
     let candidates = candidates_for(node, &partial_assignment, &element);
+    println!("Found {} candidates for {:?}", candidates.len(), element);
 
     //      - create a new assignment with the candidate and recurse
     for candidate in candidates {
+        println!("assigning {:?} to {:?}", element, candidate);
         let new_assignment = partial_assignment.with(element.clone(), candidate);
         // TODO: check if we have more assignments to make...
-        add_match_to_assignment(node, pattern, new_assignment, remaining_elements.clone());
+        assignments.append(&mut add_match_to_assignment(
+            node,
+            pattern,
+            new_assignment,
+            remaining_elements.clone(),
+        ));
         //      - concat all the valid assignments
     }
 
@@ -133,7 +140,7 @@ fn main() {
     let gme_node = gme::Node {
         id: String::from("/a/d"),
         base: None,
-        is_active: true,
+        is_active: false,
         is_meta: false,
         attributes: HashMap::new(),
         pointers: HashMap::new(),
