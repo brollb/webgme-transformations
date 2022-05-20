@@ -4,6 +4,7 @@ mod pattern;
 use std::{collections::HashMap, rc::Rc};
 
 use pattern::{Element, Node, Pattern, Relation};
+use petgraph::Graph;
 
 fn is_valid_element(node: &gme::Node, element: &Element) -> bool {
     match element {
@@ -87,14 +88,13 @@ fn main() {
     // Create the pattern
     let active_node = Node::ActiveNode;
     let node = Node::AnyNode;
-    let edge = Relation::ChildOf(&active_node, &node);
-    let pattern = Pattern::new(
-        vec![
-            pattern::Element::Node(active_node),
-            pattern::Element::Node(node),
-        ],
-        vec![edge],
-    );
+
+    let mut graph = Graph::new();
+    let active_node = graph.add_node(active_node.into());
+    let node = graph.add_node(node.into());
+    graph.add_edge(active_node, node, Relation::ChildOf);
+
+    let pattern = Pattern::new(graph);
 
     // Create the GME node
     let child = gme::Node {
