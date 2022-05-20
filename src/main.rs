@@ -63,14 +63,14 @@ fn candidates_for<'a>(
 }
 
 #[derive(Debug, Clone)]
-pub enum Reference {
-    Node(String), // TODO: should we just use Node IDs instead? A reference would probably be more efficient
+pub enum Reference<'a> {
+    Node(&'a str), // TODO: should we just use Node IDs instead? A reference would probably be more efficient
     Attribute(Rc<gme::Node>, AttributeName),
     Pointer(Rc<gme::Node>, PointerName),
     Set(Rc<gme::Node>, SetName),
 }
 
-impl Reference {
+impl Reference<'_> {
     fn is_node_ref(&self, node: &gme::Node) -> bool {
         match self {
             Reference::Node(id) => node.id == *id,
@@ -80,20 +80,20 @@ impl Reference {
 }
 
 #[derive(Debug)]
-pub struct Assignment {
-    pub matches: HashMap<NodeIndex, Reference>,
+pub struct Assignment<'a> {
+    pub matches: HashMap<NodeIndex, Reference<'a>>,
 }
 
-impl Assignment {
+impl<'a> Assignment<'a> {
     pub fn new() -> Self {
         Assignment {
             matches: HashMap::new(),
         }
     }
 
-    pub fn with(&self, element: NodeIndex, node: &gme::Node) -> Self {
+    pub fn with(&self, element: NodeIndex, node: &'a gme::Node) -> Self {
         let mut matches = self.matches.clone();
-        matches.insert(element, Reference::Node(node.id.clone()));
+        matches.insert(element, Reference::Node(&node.id));
         Self { matches }
     }
 
@@ -105,7 +105,7 @@ impl Assignment {
     }
 }
 
-pub fn find_assignments(node: &gme::Node, pattern: &Pattern) -> Vec<Assignment> {
+pub fn find_assignments<'a>(node: &'a gme::Node, pattern: &Pattern) -> Vec<Assignment<'a>> {
     let remaining_elements = pattern.reference_elements();
     add_match_to_assignment(node, pattern, Assignment::new(), remaining_elements)
 }
@@ -113,9 +113,9 @@ pub fn find_assignments(node: &gme::Node, pattern: &Pattern) -> Vec<Assignment> 
 fn add_match_to_assignment<'a>(
     node: &'a gme::Node,
     pattern: &Pattern,
-    partial_assignment: Assignment,
+    partial_assignment: Assignment<'a>,
     mut remaining_elements: Vec<NodeIndex>,
-) -> Vec<Assignment> {
+) -> Vec<Assignment<'a>> {
     // algorithm for finding all assignments:
     let mut assignments: Vec<_> = Vec::new();
 
