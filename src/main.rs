@@ -32,7 +32,6 @@ fn candidates_for<'a>(
     // Find all the valid candidates for the given node
     // TODO: Optimize this to prioritize child relations, etc
 
-    // TODO: remove nodes already assigned
     let mut nodes = Vec::new();
     if is_valid_element(node, element) && !assignment.has_node(node) {
         nodes.push(node);
@@ -130,7 +129,7 @@ fn main() {
     let child = gme::Node {
         id: String::from("/a/d/child"),
         base: None,
-        is_active: true,
+        is_active: false,
         is_meta: false,
         attributes: HashMap::new(),
         pointers: HashMap::new(),
@@ -140,7 +139,7 @@ fn main() {
     let gme_node = gme::Node {
         id: String::from("/a/d"),
         base: None,
-        is_active: false,
+        is_active: true,
         is_meta: false,
         attributes: HashMap::new(),
         pointers: HashMap::new(),
