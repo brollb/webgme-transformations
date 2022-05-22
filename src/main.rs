@@ -45,11 +45,14 @@ fn select_next_element(
 ) -> ElementIndex {
     // TODO: Find the element with the most connections to assigned elements
     // TODO: Use total edge count as a tie-breaker
+    // TODO: Prioritize nodes that are the source of a ChildOf relation?
+    // TODO: this could be a toposort step before this entire function
     0
 }
 
 /// Search the node recursively for all valid targets for the given element in the pattern.
-/// It also considers the current assignments. If `ChildOf` relations
+/// It also considers the current assignments. If `ChildOf` relations exist to an assigned
+/// node, only those children will be considered.
 fn search_valid_targets<'a>(
     node: &'a gme::Node,
     pattern: &Pattern,
@@ -163,7 +166,6 @@ fn add_match_to_assignment<'a>(
 
     //      - create a new assignment with the element_target and recurse
     for element_target in element_targets {
-        //println!("assigning {:?} to {:?}", element, element_target);
         let new_assignment = partial_assignment.with(element_idx, element_target);
         assignments.append(&mut add_match_to_assignment(
             node,
