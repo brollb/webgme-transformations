@@ -4,7 +4,7 @@ mod pattern;
 
 use std::collections::HashMap;
 
-use gme::{AttributeName, PointerName, SetName};
+use gme::{AttributeName, NodeId, PointerName, SetName};
 use pattern::{Element, Node, Pattern};
 use petgraph::graph::NodeIndex;
 
@@ -89,16 +89,16 @@ fn search_valid_targets<'a>(
 
 #[derive(Debug, Clone)]
 pub enum Reference<'a> {
-    Node(&'a str), // TODO: should we just use Node IDs instead? A reference would probably be more efficient
-    Attribute(&'a str, AttributeName),
-    Pointer(&'a str, PointerName),
-    Set(&'a str, SetName),
+    Node(&'a NodeId), // TODO: should we just use Node IDs instead? A reference would probably be more efficient
+    Attribute(&'a NodeId, AttributeName),
+    Pointer(&'a NodeId, PointerName),
+    Set(&'a NodeId, SetName),
 }
 
 impl Reference<'_> {
     fn is_node_ref(&self, node: &gme::Node) -> bool {
         match self {
-            Reference::Node(id) => node.id == *id,
+            Reference::Node(id) => node.id == **id,
             _ => false,
         }
     }

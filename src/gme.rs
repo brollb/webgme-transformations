@@ -11,10 +11,12 @@ pub struct AttributeName(String);
 pub struct PointerName(String);
 #[derive(Clone, Debug)]
 pub struct SetName(String);
+#[derive(Clone, Debug, PartialEq, Hash)]
+pub struct NodeId(String);
 
 #[derive(Clone, Debug)]
 pub struct Node {
-    pub id: String,
+    pub id: NodeId,
     pub base: Option<Rc<Node>>,
     pub is_active: bool,
     pub is_meta: bool,
