@@ -2,17 +2,38 @@ mod core;
 mod gme;
 mod pattern;
 
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use gme::{AttributeName, PointerName, SetName};
 use pattern::{Element, Node, Pattern};
 use petgraph::graph::NodeIndex;
 
-fn is_valid_element(node: &gme::Node, element: &Element) -> bool {
+fn get_valid_targets<'a>(
+    pattern: &Pattern,
+    gme_node: &'a gme::Node,
+    element: &Element,
+) -> Option<Reference<'a>> {
+    // FIXME: this should return a list of valid options
     match element {
-        Element::Node(Node::ActiveNode) => node.is_active,
-        Element::Node(_) => true,
-        _ => todo!("attributes, primitives are not yet first class!"),
+        Element::Node(node) => {
+            let is_match = match node {
+                Node::ActiveNode => gme_node.is_active,
+                _ => true,
+            };
+            if is_match {
+                Some(Reference::Node(&gme_node.id))
+            } else {
+                None
+            }
+        }
+        Element::Attribute => {
+            //Some(Reference::Attribute(&node.id, node.attributes.keys()))
+            // TODO: check other constraints
+            // TODO: check for name being equal to something
+            // TODO: If there are no constraints, we will need to list off all possible ones...
+            None
+        }
+        Element::Constant(_) => unreachable!("Constants should not be matched against!"),
     }
 }
 
@@ -23,16 +44,18 @@ fn select_next_element(
     _remaining_elements: &Vec<NodeIndex>,
 ) -> ElementIndex {
     // TODO: Find the element with the most connections to assigned elements
-    //_pattern.graph.index_twice_mut
+    // TODO: Use total edge count as a tie-breaker
     0
 }
 
-fn candidates_for<'a>(
+/// Search the node recursively for all valid targets for the given element in the pattern.
+/// It also considers the current assignments. If `ChildOf` relations
+fn search_valid_targets<'a>(
     node: &'a gme::Node,
     pattern: &Pattern,
     assignment: &Assignment,
     element_idx: &NodeIndex,
-) -> Vec<&'a gme::Node> {
+) -> Vec<Reference<'a>> {
     // Find all the valid candidates for the given node
     // TODO: Optimize this to prioritize child relations, etc
 
@@ -46,13 +69,15 @@ fn candidates_for<'a>(
     // after we retrieve our initial set, then filter using the existing constraints
 
     let element = pattern.graph.node_weight(element_idx.clone()).expect("");
-    if is_valid_element(node, element) && !assignment.has_node(node) {
-        nodes.push(node);
+    if let Some(element_target) = get_valid_targets(pattern, node, element) {
+        if !assignment.has_node(node) {
+            nodes.push(element_target);
+        }
     }
 
     for child in &node.children {
         let child_ref = &*child;
-        nodes.append(&mut candidates_for(
+        nodes.append(&mut search_valid_targets(
             child_ref,
             pattern,
             assignment,
@@ -65,9 +90,9 @@ fn candidates_for<'a>(
 #[derive(Debug, Clone)]
 pub enum Reference<'a> {
     Node(&'a str), // TODO: should we just use Node IDs instead? A reference would probably be more efficient
-    Attribute(Rc<gme::Node>, AttributeName),
-    Pointer(Rc<gme::Node>, PointerName),
-    Set(Rc<gme::Node>, SetName),
+    Attribute(&'a str, AttributeName),
+    Pointer(&'a str, PointerName),
+    Set(&'a str, SetName),
 }
 
 impl Reference<'_> {
@@ -91,9 +116,9 @@ impl<'a> Assignment<'a> {
         }
     }
 
-    pub fn with(&self, element: NodeIndex, node: &'a gme::Node) -> Self {
+    pub fn with(&self, element: NodeIndex, target: Reference<'a>) -> Self {
         let mut matches = self.matches.clone();
-        matches.insert(element, Reference::Node(&node.id));
+        matches.insert(element, target);
         Self { matches }
     }
 
@@ -127,20 +152,19 @@ fn add_match_to_assignment<'a>(
     //  - select an unassigned pattern element: (most connections to resolved nodes?)
     let idx = select_next_element(pattern, &partial_assignment, &remaining_elements);
     let element_idx = remaining_elements.swap_remove(idx);
-    //let element = pattern.graph.
 
     //    - for each candidate for the pattern element:
-    let candidates = candidates_for(node, pattern, &partial_assignment, &element_idx);
+    let element_targets = search_valid_targets(node, pattern, &partial_assignment, &element_idx);
     println!(
-        "Found {} candidates for {:?}",
-        candidates.len(),
+        "Found {} element_targets for {:?}",
+        element_targets.len(),
         element_idx
     );
 
-    //      - create a new assignment with the candidate and recurse
-    for candidate in candidates {
-        //println!("assigning {:?} to {:?}", element, candidate);
-        let new_assignment = partial_assignment.with(element_idx, candidate);
+    //      - create a new assignment with the element_target and recurse
+    for element_target in element_targets {
+        //println!("assigning {:?} to {:?}", element, element_target);
+        let new_assignment = partial_assignment.with(element_idx, element_target);
         assignments.append(&mut add_match_to_assignment(
             node,
             pattern,
@@ -159,136 +183,173 @@ fn main() {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pattern::Relation;
+    use crate::{
+        core::Primitive,
+        pattern::{Property, Relation},
+    };
     use petgraph::Graph;
     use std::rc::Rc;
 
-    #[test]
-    fn detect_active_node_child() {
-        // Create the pattern
-        let active_node = Node::ActiveNode;
-        let node = Node::AnyNode;
+    // #[test]
+    // fn detect_active_node_child() {
+    //     // Create the pattern
+    //     let active_node = Node::ActiveNode;
+    //     let node = Node::AnyNode;
 
-        let mut graph = Graph::new();
-        let active_node = graph.add_node(active_node.into());
-        let node = graph.add_node(node.into());
-        graph.add_edge(active_node, node, Relation::ChildOf);
+    //     let mut graph = Graph::new();
+    //     let active_node = graph.add_node(active_node.into());
+    //     let node = graph.add_node(node.into());
+    //     graph.add_edge(active_node, node, Relation::ChildOf);
 
-        let pattern = Pattern::new(graph);
+    //     let pattern = Pattern::new(graph);
 
-        // Create the GME node
-        let child = gme::Node {
-            id: String::from("/a/d/child"),
-            base: None,
-            is_active: false,
-            is_meta: false,
-            attributes: HashMap::new(),
-            pointers: HashMap::new(),
-            sets: HashMap::new(),
-            children: Vec::new(),
-        };
-        let gme_node = gme::Node {
-            id: String::from("/a/d"),
-            base: None,
-            is_active: true,
-            is_meta: false,
-            attributes: HashMap::new(),
-            pointers: HashMap::new(),
-            sets: HashMap::new(),
-            children: vec![Rc::new(child)],
-        };
+    //     // Create the GME node
+    //     let child = gme::Node {
+    //         id: String::from("/a/d/child"),
+    //         base: None,
+    //         is_active: false,
+    //         is_meta: false,
+    //         attributes: HashMap::new(),
+    //         pointers: HashMap::new(),
+    //         sets: HashMap::new(),
+    //         children: Vec::new(),
+    //     };
+    //     let gme_node = gme::Node {
+    //         id: String::from("/a/d"),
+    //         base: None,
+    //         is_active: true,
+    //         is_meta: false,
+    //         attributes: HashMap::new(),
+    //         pointers: HashMap::new(),
+    //         sets: HashMap::new(),
+    //         children: vec![Rc::new(child)],
+    //     };
 
-        let assignments = find_assignments(&gme_node, &pattern);
-        assert_eq!(assignments.len(), 1);
+    //     let assignments = find_assignments(&gme_node, &pattern);
+    //     assert_eq!(assignments.len(), 1);
 
-        let assignment = assignments.get(0).unwrap();
-        let active_match = assignment
-            .matches
-            .get(&active_node)
-            .expect("Could not find match for active node");
+    //     let assignment = assignments.get(0).unwrap();
+    //     let active_match = assignment
+    //         .matches
+    //         .get(&active_node)
+    //         .expect("Could not find match for active node");
 
-        match active_match {
-            Reference::Node(id) => assert_eq!(gme_node.id, *id),
-            _ => panic!("Did not match active node to a node!"),
-        }
-    }
+    //     match active_match {
+    //         Reference::Node(id) => assert_eq!(gme_node.id, *id),
+    //         _ => panic!("Did not match active node to a node!"),
+    //     }
+    // }
+
+    // // #[test]
+    // // fn detect_node_by_attr() {
+    // //     // Create the pattern
+    // //     let mut graph = Graph::new();
+    // //     let active_node = graph.add_node(Node::ActiveNode.into());
+    // //     let node1 = graph.add_node(Node::AnyNode.into());
+    // //     graph.add_edge(active_node, node1, Relation::ChildOf);
+
+    // //     let node2 = graph.add_node(Attribute()into());
+    // //     graph.add_edge(active_node, node2, Relation::ChildOf);
+
+    // //     let pattern = Pattern::new(graph);
+    // // }
 
     // #[test]
-    // fn detect_node_by_attr() {
+    // fn detect_node_child_of() {
     //     // Create the pattern
     //     let mut graph = Graph::new();
     //     let active_node = graph.add_node(Node::ActiveNode.into());
     //     let node1 = graph.add_node(Node::AnyNode.into());
     //     graph.add_edge(active_node, node1, Relation::ChildOf);
 
-    //     let node2 = graph.add_node(Attribute()into());
-    //     graph.add_edge(active_node, node2, Relation::ChildOf);
+    //     let node2 = graph.add_node(Node::AnyNode.into());
+    //     graph.add_edge(node1, node2, Relation::ChildOf);
 
     //     let pattern = Pattern::new(graph);
+
+    //     // Create the GME nodes
+    //     let gchild = gme::Node {
+    //         id: String::from("/a/d/child"),
+    //         base: None,
+    //         is_active: false,
+    //         is_meta: false,
+    //         attributes: HashMap::new(),
+    //         pointers: HashMap::new(),
+    //         sets: HashMap::new(),
+    //         children: Vec::new(),
+    //     };
+    //     let child = gme::Node {
+    //         id: String::from("/a/d/child"),
+    //         base: None,
+    //         is_active: false,
+    //         is_meta: false,
+    //         attributes: HashMap::new(),
+    //         pointers: HashMap::new(),
+    //         sets: HashMap::new(),
+    //         children: vec![Rc::new(gchild)],
+    //     };
+    //     let child2 = gme::Node {
+    //         id: String::from("/a/d/child2"),
+    //         base: None,
+    //         is_active: false,
+    //         is_meta: false,
+    //         attributes: HashMap::new(),
+    //         pointers: HashMap::new(),
+    //         sets: HashMap::new(),
+    //         children: Vec::new(),
+    //     };
+    //     let gme_node = gme::Node {
+    //         id: String::from("/a/d"),
+    //         base: None,
+    //         is_active: true,
+    //         is_meta: false,
+    //         attributes: HashMap::new(),
+    //         pointers: HashMap::new(),
+    //         sets: HashMap::new(),
+    //         children: vec![Rc::new(child), Rc::new(child2)],
+    //     };
+
+    //     let assignments = find_assignments(&gme_node, &pattern);
+    //     for assignment in &assignments {
+    //         println!("assignment:");
+    //         assignment.matches.iter().for_each(|(element, node)| {
+    //             println!("\t{:?} - {:?}", element, node);
+    //         })
+    //     }
+    //     assert_eq!(assignments.len(), 1);
     // }
 
     #[test]
-    fn detect_node_child_of() {
+    fn detect_attribute() {
         // Create the pattern
         let mut graph = Graph::new();
         let active_node = graph.add_node(Node::ActiveNode.into());
-        let node1 = graph.add_node(Node::AnyNode.into());
-        graph.add_edge(active_node, node1, Relation::ChildOf);
+        let attr = graph.add_node(Element::Attribute.into());
+        graph.add_edge(active_node, attr, Relation::Has);
 
-        let node2 = graph.add_node(Node::AnyNode.into());
-        graph.add_edge(node1, node2, Relation::ChildOf);
+        let attr_name =
+            graph.add_node(Element::Constant(Primitive::String(String::from("name"))).into());
+        graph.add_edge(
+            attr,
+            attr_name,
+            Relation::With(Property::Name, Property::Value),
+        );
 
         let pattern = Pattern::new(graph);
 
-        // Create the GME nodes
-        let gchild = gme::Node {
-            id: String::from("/a/d/child"),
-            base: None,
-            is_active: false,
-            is_meta: false,
-            attributes: HashMap::new(),
-            pointers: HashMap::new(),
-            sets: HashMap::new(),
-            children: Vec::new(),
-        };
-        let child = gme::Node {
-            id: String::from("/a/d/child"),
-            base: None,
-            is_active: false,
-            is_meta: false,
-            attributes: HashMap::new(),
-            pointers: HashMap::new(),
-            sets: HashMap::new(),
-            children: vec![Rc::new(gchild)],
-        };
-        let child2 = gme::Node {
-            id: String::from("/a/d/child2"),
-            base: None,
-            is_active: false,
-            is_meta: false,
-            attributes: HashMap::new(),
-            pointers: HashMap::new(),
-            sets: HashMap::new(),
-            children: Vec::new(),
-        };
+        // Create the GME node(s)
         let gme_node = gme::Node {
-            id: String::from("/a/d"),
+            id: String::from("/a/d/child"),
             base: None,
             is_active: true,
             is_meta: false,
             attributes: HashMap::new(),
             pointers: HashMap::new(),
             sets: HashMap::new(),
-            children: vec![Rc::new(child), Rc::new(child2)],
+            children: Vec::new(),
         };
-
         let assignments = find_assignments(&gme_node, &pattern);
-        for assignment in &assignments {
-            println!("assignment:");
-            assignment.matches.iter().for_each(|(element, node)| {
-                println!("\t{:?} - {:?}", element, node);
-            })
-        }
+        println!("{:?}", assignments);
         assert_eq!(assignments.len(), 1);
     }
 }
