@@ -56,6 +56,7 @@
       ```
 
       - Should we make a trait that allows them to be referenced? (associated type for the target?)
+      - we can just use regular references (no need for Rc)
 
     - how can we reference an attribute's name, property values?
     - can we add a new relation for Attribute -> Property::Name? (or just use with)
