@@ -11,9 +11,12 @@ use petgraph::graph::NodeIndex;
 fn get_valid_targets<'a>(
     pattern: &Pattern,
     gme_node: &'a gme::Node,
-    element: &Element,
-) -> Option<Reference<'a>> {
+    element_idx: &NodeIndex,
+) -> Vec<Reference<'a>> {
+    // FIXME: make this an iterator?
     // FIXME: this should return a list of valid options
+    let element = pattern.graph.node_weight(element_idx.clone()).expect("");
+    println!("element: {:?}", element);
     match element {
         Element::Node(node) => {
             let is_match = match node {
@@ -21,17 +24,18 @@ fn get_valid_targets<'a>(
                 _ => true,
             };
             if is_match {
-                Some(Reference::Node(&gme_node.id))
+                vec![Reference::Node(&gme_node.id)]
             } else {
-                None
+                Vec::new()
             }
         }
         Element::Attribute => {
+            println!("finding match for attribute...");
             //Some(Reference::Attribute(&node.id, node.attributes.keys()))
             // TODO: check other constraints
             // TODO: check for name being equal to something
             // TODO: If there are no constraints, we will need to list off all possible ones...
-            None
+            Vec::new()
         }
         Element::Constant(_) => unreachable!("Constants should not be matched against!"),
     }
@@ -62,7 +66,6 @@ fn search_valid_targets<'a>(
     // Find all the valid candidates for the given node
     // TODO: Optimize this to prioritize child relations, etc
 
-    let mut nodes = Vec::new();
     // TODO: Find the candidates more intelligently
     // TODO: Check if we have a ChildOf constraint (w/ an assigned parent)
 
@@ -71,12 +74,10 @@ fn search_valid_targets<'a>(
     //    - else load all nodes (not great)
     // after we retrieve our initial set, then filter using the existing constraints
 
-    let element = pattern.graph.node_weight(element_idx.clone()).expect("");
-    if let Some(element_target) = get_valid_targets(pattern, node, element) {
-        if !assignment.has_node(node) {
-            nodes.push(element_target);
-        }
-    }
+    let mut nodes: Vec<Reference<'a>> = get_valid_targets(pattern, node, element_idx)
+        .into_iter()
+        .filter(|target| assignment.has_target(target))
+        .collect();
 
     for child in &node.children {
         let child_ref = &*child;
@@ -90,21 +91,12 @@ fn search_valid_targets<'a>(
     nodes
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Reference<'a> {
-    Node(&'a NodeId), // TODO: should we just use Node IDs instead? A reference would probably be more efficient
+    Node(&'a NodeId),
     Attribute(&'a NodeId, AttributeName),
     Pointer(&'a NodeId, PointerName),
     Set(&'a NodeId, SetName),
-}
-
-impl Reference<'_> {
-    fn is_node_ref(&self, node: &gme::Node) -> bool {
-        match self {
-            Reference::Node(id) => node.id == **id,
-            _ => false,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -125,10 +117,10 @@ impl<'a> Assignment<'a> {
         Self { matches }
     }
 
-    pub fn has_node(&self, node: &gme::Node) -> bool {
+    pub fn has_target(&self, target: &Reference) -> bool {
         self.matches
             .values()
-            .find(|reference| reference.is_node_ref(node))
+            .find(|reference| *reference == target)
             .is_some()
     }
 }
@@ -341,7 +333,7 @@ mod tests {
 
         // Create the GME node(s)
         let gme_node = gme::Node {
-            id: String::from("/a/d/child"),
+            id: NodeId::new(String::from("/a/d/child")),
             base: None,
             is_active: true,
             is_meta: false,

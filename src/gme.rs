@@ -5,14 +5,20 @@ use std::{collections::HashMap, hash::Hasher, rc::Rc};
 
 use crate::core::Primitive;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AttributeName(String);
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PointerName(String);
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SetName(String);
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub struct NodeId(String);
+
+impl NodeId {
+    pub fn new(id: String) -> Self {
+        Self(id)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Node {
