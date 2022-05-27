@@ -28,7 +28,7 @@ fn get_valid_targets<'a>(
     assignment: &'a Assignment,
     top_node: &'a gme::Node,
     element_idx: NodeIndex,
-) -> Box<dyn Iterator<Item = Reference<'a>> + 'a> {
+) -> Box<dyn Iterator<Item = Reference> + 'a> {
     let element = pattern.graph.node_weight(element_idx.clone()).expect("");
     match element {
         Element::Node(node) => {
@@ -52,12 +52,15 @@ fn get_valid_targets<'a>(
                 return Box::new(std::iter::empty());
             }
 
+            // If no parent, grab all descendents
             let candidates = if let Some(parent) = parent {
                 Box::new(parent.children.iter())
             } else {
+                // FIXME: we need to check top_node, too!!!
                 top_node.descendents()
             };
 
+            // TODO: grab all the relations that need to be enforced
             Box::new(
                 candidates
                     .filter(move |gme_node| match node {
@@ -65,7 +68,7 @@ fn get_valid_targets<'a>(
                         _ => true,
                     })
                     .filter(move |c| is_valid_target(pattern, assignment, c, element_idx))
-                    .map(|node| Reference::Node(&node.id)),
+                    .map(|node| Reference::Node(node.id.clone())),
             )
         }
         Element::Attribute => {
@@ -78,31 +81,38 @@ fn get_valid_targets<'a>(
                 .graph
                 .edges_directed(element_idx, Direction::Incoming);
 
-            // TODO: check for nodes
-            let mut owned_nodes = edges.clone().filter(|e| match e.weight() {
-                Relation::Has => true,
-                _ => false,
-            });
-            if let Some(owned_node) = owned_nodes.next() {
-                let node_index = owned_node.source();
-                if let Some(node_ref) = assignment.matches.get(&node_index) {
-                    resolve_node_ref(&node_ref, top_node);
-                    // TODO: resolve the reference to the node
-                    // TODO: get the attribute list
-                    todo!();
-                } else {
-                    todo!();
+            let mut node_refs = edges.filter_map(|e| match e.weight() {
+                Relation::Has => {
+                    let node_index = e.source();
+                    assignment.matches.get(&node_index)
                 }
+                _ => None,
+            });
+            let node = node_refs
+                .next()
+                .map(|node_ref| resolve_node_ref(&node_ref, top_node));
+
+            if node_refs.next().is_some() {
+                return Box::new(std::iter::empty());
             }
-            // TODO:
-            //   - [ ] get all constraints
-            //   - [ ] sort (Has) comes first
-            println!("finding match for attribute... {:?}", top_node);
-            //Some(Reference::Attribute(&node.id, node.attributes.keys()))
-            // TODO: check other constraints
-            // TODO: check for name being equal to something
-            // TODO: If there are no constraints, we will need to list off all possible ones...
-            Box::new(std::iter::empty())
+
+            // FIXME: apply the constraints
+            let candidates = if let Some(node) = node {
+                Box::new(node.attributes.iter().map(|attr| (node, attr)))
+            } else {
+                // FIXME: we need to check top_node, too!!!
+                Box::new(
+                    top_node
+                        .descendents()
+                        .flat_map(|node| node.attributes.iter().map(|attr| (node, attr))),
+                )
+            };
+
+            Box::new(
+                candidates
+                    .filter(move |c| is_valid_target(pattern, assignment, c, element_idx))
+                    .map(|node| Reference::Node(node.id.clone())),
+            )
         }
         Element::Constant(_) => unreachable!("Constants should not be matched against!"),
     }
@@ -129,7 +139,7 @@ fn search_valid_targets<'a>(
     pattern: &'a Pattern,
     assignment: &'a Assignment,
     element_idx: &NodeIndex,
-) -> Vec<Reference<'a>> {
+) -> Vec<Reference> {
     // Find all the valid candidates for the given node
     // TODO: Optimize this to prioritize child relations, etc
 
@@ -141,7 +151,7 @@ fn search_valid_targets<'a>(
     //    - else load all nodes (not great)
     // after we retrieve our initial set, then filter using the existing constraints
 
-    let mut nodes: Vec<Reference<'a>> =
+    let mut nodes: Vec<Reference> =
         get_valid_targets(pattern, assignment, node, element_idx.clone())
             .into_iter()
             .filter(|target| !assignment.has_target(target))
@@ -160,30 +170,26 @@ fn search_valid_targets<'a>(
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Reference<'a> {
-    Node(&'a NodeId),
-    Attribute(&'a NodeId, AttributeName),
-    Pointer(&'a NodeId, PointerName),
-    Set(&'a NodeId, SetName),
+pub enum Reference {
+    Node(NodeId),
+    Attribute(NodeId, AttributeName),
+    Pointer(NodeId, PointerName),
+    Set(NodeId, SetName),
 }
-
-//impl Reference {
-//pub fn resolve(&self, top_node: gme::Node) ->
-//}
 
 #[derive(Debug)]
-pub struct Assignment<'a> {
-    pub matches: HashMap<NodeIndex, Reference<'a>>,
+pub struct Assignment {
+    pub matches: HashMap<NodeIndex, Reference>,
 }
 
-impl<'a> Assignment<'a> {
+impl<'a> Assignment {
     pub fn new() -> Self {
         Assignment {
             matches: HashMap::new(),
         }
     }
 
-    pub fn with(&self, element: NodeIndex, target: Reference<'a>) -> Self {
+    pub fn with(&self, element: NodeIndex, target: Reference) -> Self {
         let mut matches = self.matches.clone();
         matches.insert(element, target);
         Self { matches }
@@ -197,17 +203,17 @@ impl<'a> Assignment<'a> {
     }
 }
 
-pub fn find_assignments<'a>(node: &'a gme::Node, pattern: &'a Pattern) -> Vec<Assignment<'a>> {
+pub fn find_assignments(node: &gme::Node, pattern: &Pattern) -> Vec<Assignment> {
     let remaining_elements = pattern.reference_elements();
     add_match_to_assignment(node, pattern, Assignment::new(), remaining_elements)
 }
 
-fn add_match_to_assignment<'a>(
-    node: &'a gme::Node,
-    pattern: &'a Pattern,
-    partial_assignment: Assignment<'a>,
+fn add_match_to_assignment(
+    node: &gme::Node,
+    pattern: &Pattern,
+    partial_assignment: Assignment,
     mut remaining_elements: Vec<NodeIndex>,
-) -> Vec<Assignment<'a>> {
+) -> Vec<Assignment> {
     // algorithm for finding all assignments:
     let mut assignments: Vec<_> = Vec::new();
 
