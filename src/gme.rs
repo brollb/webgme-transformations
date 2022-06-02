@@ -1,3 +1,4 @@
+use core::str::Split;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::rc::Weak;
@@ -12,11 +13,23 @@ pub struct PointerName(String);
 #[derive(Clone, Debug, PartialEq, Hash, Eq)]
 pub struct SetName(String);
 #[derive(Clone, Debug, PartialEq, Hash, Eq)]
-pub struct NodeId(String);
+pub struct NodeId(pub String);
 
 impl NodeId {
     pub fn new(id: String) -> Self {
         Self(id)
+    }
+
+    pub fn relids(&self) -> Split<char> {
+        let mut relids = self.0.split('/');
+        if self.0.len() > 0 {
+            relids.next(); // skip the empty string
+        }
+        relids
+    }
+
+    pub fn relid(&self) -> &str {
+        self.relids().rev().next().unwrap()
     }
 }
 
@@ -58,3 +71,13 @@ impl Hash for Node {
 
 #[derive(Clone, Debug)]
 pub struct Attribute(pub Primitive);
+
+pub(crate) fn find_with_id<'a>(top_node: &'a Node, node_id: &NodeId) -> &'a Node {
+    let depth = top_node.id.relids().count();
+    node_id.relids().skip(depth).fold(top_node, |node, relid| {
+        node.children
+            .iter()
+            .find(|child| child.id.relid() == relid)
+            .expect("Could not find child")
+    })
+}

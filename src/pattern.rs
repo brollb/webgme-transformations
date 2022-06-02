@@ -1,3 +1,5 @@
+use crate::assignment::Reference;
+use crate::gme;
 use petgraph::graph::{Graph, NodeIndex};
 
 use crate::core::Primitive;
@@ -33,6 +35,34 @@ pub enum Relation {
     Has,                      // btwn node and attribute
     With(Property, Property), // 2 attributes or constants
     Equal,
+}
+
+impl Relation {
+    pub fn is_valid(&self, top_node: &gme::Node, src: &Reference, dst: &Reference) -> bool {
+        match (self, src, dst) {
+            (Relation::ChildOf, Reference::Node(src_id), Reference::Node(dst_id)) => {
+                let src = gme::find_with_id(top_node, src_id);
+                println!(
+                    "-> Checking if {:?} is a child of {:?}: {:?}",
+                    dst_id,
+                    src_id,
+                    src.children
+                        .iter()
+                        .find(|child| &child.id == dst_id)
+                        .is_some()
+                );
+                println!("\n{:?}", src.children);
+                src.children
+                    .iter()
+                    .find(|child| &child.id == dst_id)
+                    .is_some()
+            }
+            (relation, src, dst) => panic!(
+                "{:?} relation found between incompatible graph node types: {:?} -> {:?}",
+                relation, src, dst
+            ),
+        }
+    }
 }
 
 pub struct Pattern {
