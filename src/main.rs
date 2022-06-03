@@ -11,49 +11,6 @@ use gme::find_with_id;
 use pattern::{Element, Node, Pattern, Relation};
 use petgraph::{graph::NodeIndex, visit::EdgeRef, Direction};
 
-fn is_valid_target(
-    pattern: &Pattern,
-    assignment: &Assignment,
-    top_node: &gme::Node,
-    gme_ref: &Reference,
-    element_idx: NodeIndex,
-) -> bool {
-    // TODO: get all the constraints and evaluate them
-    let incoming_rels = pattern
-        .graph
-        .edges_directed(element_idx, Direction::Incoming)
-        .filter_map(|e| {
-            let node_index = e.source();
-            assignment
-                .matches
-                .get(&node_index)
-                .map(|src_ref| (e.weight(), src_ref, gme_ref))
-        });
-
-    let outgoing_rels = pattern
-        .graph
-        .edges_directed(element_idx, Direction::Outgoing)
-        .filter_map(|e| {
-            let node_index = e.target();
-            assignment
-                .matches
-                .get(&node_index)
-                .map(|dst_ref| (e.weight(), gme_ref, dst_ref))
-        });
-
-    let mut relations = incoming_rels.chain(outgoing_rels);
-    println!(
-        "\nFound {} constraints on {:?} (as {:?}) -- {:?}",
-        relations.clone().count(),
-        gme_ref,
-        element_idx,
-        assignment
-    );
-    let violation = relations.find(|(relation, src, dst)| !relation.is_valid(top_node, src, dst));
-
-    violation.is_none()
-}
-
 fn get_valid_targets<'a>(
     pattern: &'a Pattern,
     assignment: &'a Assignment,
@@ -107,7 +64,7 @@ fn get_valid_targets<'a>(
                     })
                     .filter_map(move |node| {
                         let gme_ref = Reference::Node(node.id.clone());
-                        if is_valid_target(pattern, assignment, top_node, &gme_ref, element_idx) {
+                        if assignment.is_valid_target(pattern, top_node, element_idx, &gme_ref) {
                             Some(gme_ref)
                         } else {
                             None
@@ -168,7 +125,7 @@ fn get_valid_targets<'a>(
             );
             Box::new(candidates.into_iter().filter_map(move |(node, attr)| {
                 let gme_ref = Reference::Attribute(node.id.clone(), attr.clone());
-                if is_valid_target(pattern, assignment, &top_node, &gme_ref, element_idx) {
+                if assignment.is_valid_target(pattern, top_node, element_idx, &gme_ref) {
                     Some(gme_ref)
                 } else {
                     None
@@ -226,9 +183,7 @@ fn add_match_to_assignment(
 
     //    - for each candidate for the pattern element:
     let element_targets: Vec<_> =
-        get_valid_targets(pattern, &partial_assignment, node, element_idx.clone())
-            .filter(|gme_ref| !partial_assignment.has_target(gme_ref))
-            .collect();
+        get_valid_targets(pattern, &partial_assignment, node, element_idx.clone()).collect();
 
     println!(
         "Found {} element_targets for {:?}: {:?}",
@@ -317,19 +272,21 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn detect_node_by_attr() {
-    //     // Create the pattern
-    //     let mut graph = Graph::new();
-    //     let active_node = graph.add_node(Node::ActiveNode.into());
-    //     let node1 = graph.add_node(Node::AnyNode.into());
-    //     graph.add_edge(active_node, node1, Relation::ChildOf);
+    //#[test]
+    //fn detect_node_by_attr() {
+    //// Create the pattern
+    //let mut graph = Graph::new();
+    //let active_node = graph.add_node(Node::ActiveNode.into());
+    //let node1 = graph.add_node(Node::AnyNode.into());
+    //graph.add_edge(active_node, node1, Relation::ChildOf);
 
-    //     let node2 = graph.add_node(Attribute()into());
-    //     graph.add_edge(active_node, node2, Relation::ChildOf);
+    //let attr_name =
+    //graph.add_node(Element::Constant(Primitive::String(String::from("name"))).into());
+    //let node2 = graph.add_node(Attribute().into());
+    //graph.add_edge(active_node, node2, Relation::ChildOf);
 
-    //     let pattern = Pattern::new(graph);
-    // }
+    //let pattern = Pattern::new(graph);
+    //}
 
     #[test]
     fn detect_node_child_of() {
@@ -429,6 +386,18 @@ mod tests {
         };
         let assignments = find_assignments(gme_node, &pattern);
         assert_eq!(assignments.len(), 1);
+        let (_, attr) = assignments
+            .into_iter()
+            .next()
+            .unwrap()
+            .matches
+            .into_iter()
+            .next()
+            .unwrap();
+        todo!("Check that it is the right ref");
+        //match attr {
+        //Reference::Attribute(node_id, att
+        //}
     }
 
     #[test]
