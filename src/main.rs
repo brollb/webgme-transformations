@@ -54,7 +54,6 @@ fn get_valid_targets<'a>(
                 descendents
             };
 
-            // TODO: grab all the relations that need to be enforced
             Box::new(
                 candidates
                     .into_iter()
@@ -272,21 +271,71 @@ mod tests {
         }
     }
 
-    //#[test]
-    //fn detect_node_by_attr() {
-    //// Create the pattern
-    //let mut graph = Graph::new();
-    //let active_node = graph.add_node(Node::ActiveNode.into());
-    //let node1 = graph.add_node(Node::AnyNode.into());
-    //graph.add_edge(active_node, node1, Relation::ChildOf);
+    #[test]
+    fn detect_node_by_attr() {
+        // Create the pattern
+        let mut graph = Graph::new();
+        let node = graph.add_node(Node::AnyNode.into());
+        let attribute = graph.add_node(Element::Attribute);
 
-    //let attr_name =
-    //graph.add_node(Element::Constant(Primitive::String(String::from("name"))).into());
-    //let node2 = graph.add_node(Attribute().into());
-    //graph.add_edge(active_node, node2, Relation::ChildOf);
+        let attr_val = graph
+            .add_node(Element::Constant(Primitive::String(String::from("TargetValue"))).into());
+        graph.add_edge(node, attribute, Relation::Has);
+        graph.add_edge(
+            attribute,
+            attr_val,
+            Relation::With(Property::Value, Property::Value),
+        );
 
-    //let pattern = Pattern::new(graph);
-    //}
+        let pattern = Pattern::new(graph);
+
+        let target_id = gme::NodeId::new(String::from("/a/target"));
+            let attributes: HashMap<_, _> = vec![(
+                AttributeName(String::from("name")),
+                gme::Attribute(Primitive::String(String::from("TargetValue"))),
+            )].into_iter().collect();
+        let target = gme::Node {
+            id: target_id.clone(),
+            base: None,
+            is_active: false,
+            is_meta: false,
+            attributes,
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: Vec::new(),
+        };
+        let children = (1..=10).map(|i| {
+            let attributes: HashMap<_, _> = vec![(
+                AttributeName(String::from("name")),
+                gme::Attribute(Primitive::String(format!("Node #{}", i))),
+            )]
+            .into_iter()
+            .collect();
+
+            Rc::new(gme::Node {
+                id: gme::NodeId::new(format!("/a/{}", i)),
+                base: None,
+                is_active: false,
+                is_meta: false,
+                attributes,
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: Vec::new(),
+            })
+        }).chain(std::iter::once(Rc::new(target)));
+        let parent = gme::Node {
+            id: gme::NodeId::new(String::from("/a")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes: HashMap::new(),
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: children.collect(),
+        };
+        let assignments = find_assignments(parent, &pattern);
+        assert_eq!(assignments.len(), 1);
+    }
 
     #[test]
     fn detect_node_child_of() {
@@ -397,11 +446,11 @@ mod tests {
             .unwrap();
 
         match attr {
-        Reference::Attribute(node_id, attr_name) => {
-            assert_eq!(node_id, id);
-            assert_eq!(attr_name.0, String::from("name"));
-        },
-        _ => panic!("Expected attribute ref but found {:?}", attr),
+            Reference::Attribute(node_id, attr_name) => {
+                assert_eq!(node_id, id);
+                assert_eq!(attr_name.0, String::from("name"));
+            }
+            _ => panic!("Expected attribute ref but found {:?}", attr),
         };
     }
 
