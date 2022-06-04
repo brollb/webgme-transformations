@@ -374,8 +374,9 @@ mod tests {
         let mut attributes = HashMap::new();
         let attr = gme::Attribute(Primitive::String(String::from("NodeName")));
         attributes.insert(AttributeName(String::from("name")), attr);
+        let id = NodeId::new(String::from("/a/d/child"));
         let gme_node = gme::Node {
-            id: NodeId::new(String::from("/a/d/child")),
+            id: id.clone(),
             base: None,
             is_active: true,
             is_meta: false,
@@ -394,10 +395,14 @@ mod tests {
             .into_iter()
             .next()
             .unwrap();
-        todo!("Check that it is the right ref");
-        //match attr {
-        //Reference::Attribute(node_id, att
-        //}
+
+        match attr {
+        Reference::Attribute(node_id, attr_name) => {
+            assert_eq!(node_id, id);
+            assert_eq!(attr_name.0, String::from("name"));
+        },
+        _ => panic!("Expected attribute ref but found {:?}", attr),
+        };
     }
 
     #[test]
