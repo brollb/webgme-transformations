@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::core::Primitive;
 use crate::gme;
@@ -41,18 +40,6 @@ impl<'a> Assignment {
             .find(|reference| *reference == target)
             .is_some()
     }
-
-    //fn is_valid_relation(
-    //&self,
-    //pattern: &Pattern,
-    //top_node: &gme::Node,
-    //relation: &Relation,
-    //gme_ref: &Reference,
-    //index: NodeIndex,
-    //direction:
-
-    //) -> bool {
-    //}
 
     pub fn is_valid_target(
         &self,
