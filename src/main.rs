@@ -446,9 +446,20 @@ mod tests {
             children: children.collect(),
         };
         let assignments = find_assignments(parent, &pattern);
-        // FIXME: why are there 22 matches?
-        println!("assignments: {:?}", assignments);
-        assert_eq!(assignments.len(), 1);
+        assert_eq!(assignments.len(), 2);
+        assignments.into_iter().for_each(|assgn| {
+            let gme_refs = assgn.matches.values().into_iter();
+            let mut attr_ref_count = 0;
+            gme_refs.for_each(|gme_ref| match gme_ref {
+                Reference::Attribute(node_id, attr_name) => {
+                    attr_ref_count += 1;
+                    assert!(node_id.0.contains("target"));
+                    assert_eq!(attr_name.0, String::from("name"));
+                }
+                _ => {}
+            });
+            assert_eq!(attr_ref_count, 2);
+        });
     }
 
     #[test]

@@ -113,11 +113,12 @@ impl<'a> Assignment {
                                 Reference::Node(node_id) => gme::find_with_id(top_node, &node_id),
                                 _ => unreachable!(),
                             };
-                            let attr_name = match attr_ref {
-                                Reference::Attribute(_node_id, name) => name,
+                            match attr_ref {
+                                Reference::Attribute(node_id, attr_name) => {
+                                    node_id == &node.id && node.attributes.contains_key(attr_name)
+                                }
                                 _ => unreachable!(),
-                            };
-                            node.attributes.contains_key(attr_name)
+                            }
                         })
                         .unwrap_or(true),
                     Relation::With(src_prop, dst_prop) => {
