@@ -7,7 +7,7 @@ use crate::core::Primitive;
 #[derive(Clone, Eq, Hash, PartialEq, Debug)]
 pub enum Element {
     Node(Node),
-    Constant(Primitive), // TODO: everything else needs to be bound
+    Constant(Primitive), // everything else needs to be bound
     Attribute,
 }
 

@@ -100,7 +100,7 @@ fn get_valid_targets<'a>(
                 return Box::new(std::iter::empty());
             }
 
-            // FIXME: apply the constraints
+            // apply the constraints
             let candidates: Vec<_> = if let Some(node) = node {
                 node.attributes
                     .keys()
