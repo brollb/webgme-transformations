@@ -338,6 +338,101 @@ mod tests {
     }
 
     #[test]
+    fn detect_node_shared_name() {
+        // Create the pattern
+        let mut graph = Graph::new();
+        let name_const = graph.add_node(Element::Constant(Primitive::String(String::from("name"))));
+        let node1 = graph.add_node(Node::AnyNode.into());
+        let attribute1 = graph.add_node(Element::Attribute);
+        graph.add_edge(node1, attribute1, Relation::Has);
+        graph.add_edge(attribute1, name_const, Relation::With(Property::Name, Property::Value));
+
+        let node2 = graph.add_node(Node::AnyNode.into());
+        let attribute2 = graph.add_node(Element::Attribute);
+        graph.add_edge(node2, attribute2, Relation::Has);
+        graph.add_edge(attribute2, name_const, Relation::With(Property::Name, Property::Value));
+
+        graph.add_edge(
+            attribute1,
+            attribute2,
+            Relation::With(Property::Value, Property::Value),
+        );
+        let pattern = Pattern::new(graph);
+
+        // TODO: make a bunch of nodes and detect the ones that have the same name
+        // TODO: add nodes that would match if using a different attribute name
+
+        let targets = (1..=2).map(|i| {
+            let target_id = gme::NodeId::new(format!("/a/target_{}", i));
+            let attributes: HashMap<_, _> = vec![(
+                AttributeName(String::from("name")),
+                gme::Attribute(Primitive::String(String::from("SharedName"))),
+            )].into_iter().collect();
+        Rc::new(gme::Node {
+            id: target_id.clone(),
+            base: None,
+            is_active: false,
+            is_meta: false,
+            attributes,
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: Vec::new(),
+        })
+        });
+        let decoys = (1..=10).map(|i| {
+            let id = gme::NodeId::new(format!("/a/decoy_{}", i));
+            let attributes: HashMap<_, _> = vec![(
+                AttributeName(String::from("value")),
+                gme::Attribute(Primitive::String(String::from("SharedValue"))),
+            )].into_iter().collect();
+        Rc::new(gme::Node {
+            id,
+            base: None,
+            is_active: false,
+            is_meta: false,
+            attributes,
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: Vec::new(),
+        })
+        });
+
+        let children = (1..=10).map(|i| {
+            let attributes: HashMap<_, _> = vec![(
+                AttributeName(String::from("name")),
+                gme::Attribute(Primitive::String(format!("Node #{}", i))),
+            )]
+            .into_iter()
+            .collect();
+
+            Rc::new(gme::Node {
+                id: gme::NodeId::new(format!("/a/{}", i)),
+                base: None,
+                is_active: false,
+                is_meta: false,
+                attributes,
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: Vec::new(),
+            })
+        }).chain(targets).chain(decoys);
+        let parent = gme::Node {
+            id: gme::NodeId::new(String::from("/a")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes: HashMap::new(),
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: children.collect(),
+        };
+        let assignments = find_assignments(parent, &pattern);
+        println!("assignments: {:?}", assignments);
+        assert_eq!(assignments.len(), 1);
+    }
+
+
+    #[test]
     fn detect_node_child_of() {
         // Create the pattern
         let mut graph = Graph::new();
