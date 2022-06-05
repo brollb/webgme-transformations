@@ -101,25 +101,25 @@ impl<'a> Assignment {
                         })
                         .unwrap_or(true),
 
-                    Relation::Has => {
-                        self.matches.get(&index)
-                            .map(|other_ref| {
-                                let (node_ref, attr_ref) = match dir {
-                                    Direction::Incoming => (other_ref, gme_ref),
-                                    Direction::Outgoing => (gme_ref, other_ref),
-                                };
-                                let node = match node_ref {
-                                    Reference::Node(node_id) => gme::find_with_id(top_node, &node_id),
-                                    _ => unreachable!(),
-                                };
-                                let attr_name = match attr_ref {
-                                    Reference::Attribute(_node_id, name) => name,
-                                    _ => unreachable!(),
-                                };
-                                node.attributes.contains_key(attr_name)
-                            })
-                        .unwrap_or(true)
-                    }
+                    Relation::Has => self
+                        .matches
+                        .get(&index)
+                        .map(|other_ref| {
+                            let (node_ref, attr_ref) = match dir {
+                                Direction::Incoming => (other_ref, gme_ref),
+                                Direction::Outgoing => (gme_ref, other_ref),
+                            };
+                            let node = match node_ref {
+                                Reference::Node(node_id) => gme::find_with_id(top_node, &node_id),
+                                _ => unreachable!(),
+                            };
+                            let attr_name = match attr_ref {
+                                Reference::Attribute(_node_id, name) => name,
+                                _ => unreachable!(),
+                            };
+                            node.attributes.contains_key(attr_name)
+                        })
+                        .unwrap_or(true),
                     Relation::With(src_prop, dst_prop) => {
                         // check that the given gme_ref's name or value
                         // matches the (name or value of the) connected node/element
@@ -139,7 +139,8 @@ impl<'a> Assignment {
                             .map(|other_ref_val| other_ref_val == gme_ref_val)
                             .unwrap_or(true)
                     }
-                    Relation::Equal => {  // TODO: Check that the references are equal
+                    Relation::Equal => {
+                        // TODO: Check that the references are equal
                         todo!();
                     }
                 };
