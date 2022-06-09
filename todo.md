@@ -1,4 +1,4 @@
-# To Do
+# Overview
 - algorithm:
   - determine the search order
     - most constrained elements (ie, with the most resolved neighbors - incl constants)
@@ -9,39 +9,17 @@
       - get parent relationship for attributes
     - filter out candidates that violate some constraints
 
+## To Do
 - let's start with some motivating (simplistic) examples
   - how about a visualizer that converts the data to a (row in a) table
   - the pattern is pretty simple:
     - match a node
+    - match all attributes of the current node
+      - convert them to rows in a table
 
-- checking relations... We might need to define these on the assignment instead. Then we can check if they are constants or assignable nodes. I think we need something like:
-    ```rust
-    match relation {
-      Relation::ChildOf => match (src_index, target_index) {
-        (Reference::Node(src_id), Reference::Node(dst_id)) => {
-        },
-        _ => panic!(),
-      },
-      Relation::Has => match (src_index, target_index) {
-      // TODO: there is another step where we check that these are assigned...
-      // TODO: we can't just ignore edges without defined matches. We need a 
-      // helper to determine if they still need assignment
-        (Reference::Node(node_id), Reference::Attribute(id, attr_name)) => {
-        },
-      },
-      Relation::Equal => src == dst,
-      Relation::With => match (src_index, target_index) {
-        Constant
-      }
-    }
-    match (relation, src_index, target_index) {
-    }
-    ```
-    Hmm... It actually depends on the element type. For With, Equal, we may need to compare against a constant (Equal is ref-equal so they would just be false).
-  - [ ] refactor the validity checking to be part of `Assignment` since it has access to the pattern graph, relation, and assignments
+- [ ] add support for pointers?
 
-- is it possible that there is a violated constraint not detected by just checking locally?
-    - I don't think so since we are eventually resolving everything...
+- [ ] add benchmarks (speed up the search by setting order intelligently)
 
 - [ ] update to iterator instead
 
@@ -159,4 +137,33 @@
 
 - one disappointing thing is that the current Relations are not enforced by types on the graph
   - this is actually a perk for Equal :)
+
+- checking relations... We might need to define these on the assignment instead. Then we can check if they are constants or assignable nodes. I think we need something like:
+    ```rust
+    match relation {
+      Relation::ChildOf => match (src_index, target_index) {
+        (Reference::Node(src_id), Reference::Node(dst_id)) => {
+        },
+        _ => panic!(),
+      },
+      Relation::Has => match (src_index, target_index) {
+      // TODO: there is another step where we check that these are assigned...
+      // TODO: we can't just ignore edges without defined matches. We need a 
+      // helper to determine if they still need assignment
+        (Reference::Node(node_id), Reference::Attribute(id, attr_name)) => {
+        },
+      },
+      Relation::Equal => src == dst,
+      Relation::With => match (src_index, target_index) {
+        Constant
+      }
+    }
+    match (relation, src_index, target_index) {
+    }
+    ```
+    Hmm... It actually depends on the element type. For With, Equal, we may need to compare against a constant (Equal is ref-equal so they would just be false).
+  - [x] refactor the validity checking to be part of `Assignment` since it has access to the pattern graph, relation, and assignments
+
+- [x] is it possible that there is a violated constraint not detected by just checking locally?
+    - I don't think so since we are eventually resolving everything...
 
