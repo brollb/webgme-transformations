@@ -8,3 +8,7 @@ edition = "2021"
 [dependencies]
 petgraph = "0.6.0"
 derive_more = "0.99.17"
+#wasm-bindgen = { version = "0.2.63", optional = true }
+
+#[features]
+#wasm = ["wasm-bindgen"]

@@ -17,11 +17,30 @@
     - match all attributes of the current node
       - convert them to rows in a table
 
+- [ ] Get a simple transformation going
+  - [ ] setup JS interop
+    - [-] make the existing types wasm-supported
+        - hide it behind a feature flag
+        - wasm_bindgen only supports C-style enums
+    - [ ] make a test case
+      - [ ] maybe make the test case that finds two nodes with the same name?
+    - [ ] should I make it accept (slightly extended) WJI format???
+        - is_active & is_meta need to be added
+        - otherwise, that is basically it
+        - should the parsing happen on the rust side? Probably so we don't have to do it a bunch
+        - [ ] what type should I use to accept JSValue dictionaries?
+            - JSValue, it seems
+        - [ ] how to resolve the ID fields?
+            - there is a resolving function in the WJI itself...
+  - [ ] maybe this should just be a generic transformation within GME?
+
 - [ ] add support for pointers?
 
 - [ ] add benchmarks (speed up the search by setting order intelligently)
 
 - [ ] update to iterator instead
+    - first, let's just implement `matches` for all matches
+        - we can update it later to an iterator in JS (if supported)
 
 ## Done
 - [x] should we flip the get_valid_targets search part? Should it depend on the type of element?
