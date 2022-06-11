@@ -41,12 +41,14 @@
         - let's do it. it should probably not be tied to a plugin but rather a general utility
     - [ ] should I make it accept (slightly extended) WJI format???
         - is_active & is_meta need to be added
+        - IDs need to be resolved to actual values (or passed as dict?)
         - otherwise, that is basically it
         - should the parsing happen on the rust side? Probably so we don't have to do it a bunch
-        - [ ] what type should I use to accept JSValue dictionaries?
+        - [-] what type should I use to accept JSValue dictionaries?
             - JSValue, it seems
         - [ ] how to resolve the ID fields?
             - there is a resolving function in the WJI itself...
+
   - [ ] maybe this should just be a generic transformation within GME?
 
 - [ ] add support for pointers?
