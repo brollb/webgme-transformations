@@ -9,6 +9,14 @@
       - get parent relationship for attributes
     - filter out candidates that violate some constraints
 
+## Transformation Language
+### Output Patterns
+- sequence of patterns to apply (manage complexity)
+- all nodes should be instantiable
+- should be able to ref nodes from earlier matches
+    - `ExistingNode`
+    - `Node` output type can optionally have a `ref`/`id`/`origin` reference
+
 ## To Do
 - let's start with some motivating (simplistic) examples
   - how about a visualizer that converts the data to a (row in a) table
@@ -21,9 +29,16 @@
   - [ ] setup JS interop
     - [-] make the existing types wasm-supported
         - hide it behind a feature flag
-        - wasm_bindgen only supports C-style enums
+        - **wasm_bindgen only supports C-style enums**
+    - [ ] how should we actually construct non-trivial GME nodes?
+      - it might be nice to just parse the JS objects but not clear exactly how to interact with them in a meaningful way...
+          - I think we should do this: https://github.com/rustwasm/wasm-bindgen/issues/964
+          - We define GMENode and use serde_json
     - [ ] make a test case
       - [ ] maybe make the test case that finds two nodes with the same name?
+      - [ ] should I start writing the transformation language?
+        - This would help with the interface...
+        - let's do it. it should probably not be tied to a plugin but rather a general utility
     - [ ] should I make it accept (slightly extended) WJI format???
         - is_active & is_meta need to be added
         - otherwise, that is basically it
