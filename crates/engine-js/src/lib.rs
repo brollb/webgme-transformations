@@ -157,8 +157,8 @@ impl Pattern {
         };
 
         log(&format!("called matches with node named: {}", name));
-
-        // TODO: accept a webgme node in WJI format and a pattern and return a list of assignments
-        //alert("Hello, gme-pattern-engine!");
+        let assignments = find_assignments(node, &pattern);
+        // TODO: Convert the assignments to something serializable
+        log(&format!("found {} assignments", assignments.len()));
     }
 }
