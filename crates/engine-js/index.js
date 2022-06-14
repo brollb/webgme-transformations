@@ -5,12 +5,16 @@ function createOutputModel(elements, assignments) {
 	// TODO: For each of the assignments, create a new node with the given ID and attribute name
 	const attrRef = assignments[0];
 	console.log(`reference to a node with the given name: ${attrRef}`);
+
+	return attrRef.nodeId;
 	// In practice, elements will likely be node paths of the element nodes
 	// This will allow them to easily be turned into a lookup dict
 }
 
 engine.then(m => {
 	// Here is an example of how to find nodes with a given name
+
+	// Create an example GME subtree
 	const parent = new m.GMENode("/path", "parent");
 	parent.add_child(new m.GMENode("/path/1", "target"));
 	parent.add_child(new m.GMENode("/path/2", "target"));
@@ -18,6 +22,7 @@ engine.then(m => {
 	parent.add_child(other_child);
 	other_child.add_child(new m.GMENode("/path/3/1", "target"));
 
+	// Create an example pattern finding all attributes "name" = "target"
 	const attr = new m.Attribute();
 	const name_const = new m.Constant("name");
 	const target_const = new m.Constant("target");
@@ -36,20 +41,18 @@ engine.then(m => {
 		attr,
 		name_const,
 		target_const,
+		attr_name_rel,
 		attr_val_rel,
 	];
 	const pattern = new m.Pattern(elements);
 
-	// TODO: add elements (as a list?)
-	// TODO: add relations/connectivity. What should these look like?
-	// Find inspiration in jointjs?
-
+	// Find all the matches
 	const matches = pattern.matches(node);
 
+	// Create a table of all the matching nodes
 	console.log(`found ${matches.length} matches`);
 	matches.forEach(assignments => console.log('\t', assignments));
-
-	// TODO: make an example where we use the assignments to create an output model
-	const models = matches.map(createOutputModel.bind(null, elements);
+	const rows = matches.map(createOutputModel.bind(null, elements);
+	console.log({rows});
 })
 	.catch(console.error);
