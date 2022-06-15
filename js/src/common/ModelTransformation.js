@@ -37,5 +37,15 @@ define([], function() {
 		}
 	}
 
+	class Pattern {
+
+		async fromNode(core, node) {
+			const elementNodes = await core.loadChildren(node);
+			// TODO: sort the nodes elements vs relations
+			// TODO: for each of the nodes, add it
+			// TODO: for each of the relations, add it
+		}
+	}
+
 	return Transformation;
 });
