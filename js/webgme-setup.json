@@ -1,0 +1,12 @@
+{
+  "components": {
+    "seeds": {
+      "test": {
+        "src": "src/seeds/test"
+      }
+    }
+  },
+  "dependencies": {
+    "seeds": {}
+  }
+}
