@@ -80,12 +80,11 @@ describe('ModelTransformation', function () {
 
     describe('simple table example', function() {
         it('should create nodes (rows) for each attribute', async function() {
-            const node = await getNodeByName('transformation');
+            const node = await getNodeByName('AttributeTable');
             const transformation = await Transformation.fromNode(core, node);
             const model = await getNodeByName('NodeWithTwoAttributes');
             const output = transformation.apply(model);
-            console.log({output});
-            // TODO: Get example to transform
+            assert(false, 'todo!');
         });
     });
 });
