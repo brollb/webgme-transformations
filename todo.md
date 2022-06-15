@@ -26,6 +26,23 @@
       - convert them to rows in a table
 
 - [ ] Get a simple transformation going
+  - [ ] create a transformation utility
+      - `Transformation.apply(node)`
+      - return WJI??
+      - [ ] create a metamodel
+          - what should be instantiable?
+            - Node (set the base)
+            - Attribute
+              - set the type??? Probably not needed
+      - [ ] add a test
+      - [ ] add a test seed
+      - [ ] what is a natural format to input into the transformation?
+          - GME nodes for both inputs?
+            - this can be generalized later
+          - Output can be WJI but *what IDs should we use*?
+            - @meta:<NodeName>
+            - we could use the WJI to resolve the addresses for existing nodes
+            - we could use @id for new nodes
   - [ ] setup JS interop
     - [-] make the existing types wasm-supported
         - hide it behind a feature flag
@@ -39,6 +56,8 @@
       - [ ] should I start writing the transformation language?
         - This would help with the interface...
         - let's do it. it should probably not be tied to a plugin but rather a general utility
+          - not quite sure how I want to organize the repo
+
     - [ ] should I make it accept (slightly extended) WJI format???
         - is_active & is_meta need to be added
         - IDs need to be resolved to actual values (or passed as dict?)
@@ -50,6 +69,8 @@
             - there is a resolving function in the WJI itself...
 
   - [ ] maybe this should just be a generic transformation within GME?
+
+- [ ] split the webgme app into a separate repo
 
 - [ ] add support for pointers?
 
