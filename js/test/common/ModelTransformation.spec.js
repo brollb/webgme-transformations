@@ -83,6 +83,11 @@ describe('ModelTransformation', function () {
             const node = await getNodeByName('AttributeTable');
             const transformation = await Transformation.fromNode(core, node);
             const model = await getNodeByName('NodeWithTwoAttributes');
+			//node = {
+				//id: '/some/test',
+				//attributes: {},
+				//children: []
+			//};
             const output = transformation.apply(model);
             assert(false, 'todo!');
         });

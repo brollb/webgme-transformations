@@ -1,4 +1,3 @@
-// TODO: load the pattern matching engine
 define(['./engine/index'], function(engineModule) {
 	let enginePromise;
 	function getEngine() {
@@ -7,16 +6,20 @@ define(['./engine/index'], function(engineModule) {
 		}
 		return enginePromise;
 	}
-	console.log({engineModule});
 
 	class Transformation {
-		constructor() {
+		constructor(steps) {
+			this.steps = steps;
 			// TODO: We may want to create an interface to use with the core (like Umesh mentioned a while ago) so
 			// this can create WJI or GME nodes. Technically, WJI can be imported but this has decent perf overhead.
 			// First, we should just see if we can optimize WJI
 		}
 
 		apply(activeNode) {
+			this.steps.reduce(async (refDataP, step) => {
+				const refData = await refDataP;
+				return step.apply(activeNode);
+			}, Promise.resolve());
 			// TODO
 		}
 
@@ -35,11 +38,18 @@ define(['./engine/index'], function(engineModule) {
 			// TODO: sort by "next" pointer
 			console.log('steps:', stepNodes.map(c => [core.getPath(c), core.getAttribute(c, 'name')]))
 			const steps = await Promise.all(stepNodes.map(step => TransformationStep.fromNode(core, step)));
+			return new Transformation(steps);
 		}
 	}
 
 	class TransformationStep {
-		constructor() {
+		constructor(pattern) {
+			this.pattern = pattern;
+		}
+
+		async apply(activeNode) {
+			const matches = await this.pattern.matches(activeNode);
+			console.log('found matches:', matches);
 			// TODO
 		}
 
@@ -49,53 +59,188 @@ define(['./engine/index'], function(engineModule) {
 			const inputPattern = await Pattern.fromNode(core, inputNode);
 
 			console.log('loading step for', core.getAttribute(node, 'name'));
+			return new TransformationStep(inputPattern/*, outputStructure*/);
 		}
 	}
 
 	class Pattern {
+		constructor() {
+			this.graph = new Graph();
+		}
 
-		static async fromNode(core, node) {
-			const relationType = Object.values(core.getAllMetaNodes(node))
+		async matches(node) {
+			const engine = await getEngine();
+			console.log('(JS) pattern:', JSON.stringify(this));
+			return engine.find_matches(node, this);
+		}
+
+		addElement(node) {
+			return this.graph.addNode(node);
+		}
+
+		getElements() {
+			return this.graph.nodes.slice();
+		}
+
+		addRelation(srcIndex, dstIndex, relation) {
+			return this.graph.addEdge(srcIndex, dstIndex, relation);
+		}
+
+		static async fromNode(core, patternNode) {
+			const relationType = Object.values(core.getAllMetaNodes(patternNode))
 				.find(node => core.getAttribute(node, 'name') === 'Relation');
 			const isRelation = node => core.isTypeOf(node, relationType);
-			const elementNodes = (await core.loadChildren(node))
+			const elementNodes = (await core.loadChildren(patternNode))
 				.sort((n1, n2) => isRelation(n1) ? 1 : -1);
+
+			const pattern = new Pattern();
 			const engine = await getEngine();
 			console.log({engine});
 
-			const elements = elementNodes.map((node, _index, elements) => {
+			await elementNodes.reduce(async (prev, node) => {
+				await prev;
 				if (!isRelation(node)) {
-					return Pattern.getElementForNode(engine, core, node);
+					const element = Pattern.getElementForNode(engine, core, node);
+					pattern.addElement(element);
 				} else {
-					// TODO: look up the source, destinations
-					// TODO: pass them to getRelationElementForNode
-					throw new Error('todo!');
+					const srcPath = core.getPointerPath(node, 'src');
+					const srcIndex = elementNodes.findIndex(n => core.getPath(n) === srcPath);
+					const dstPath = core.getPointerPath(node, 'dst');
+					const dstIndex = elementNodes.findIndex(n => core.getPath(n) === dstPath);
+
+
+					const elements = pattern.getElements();
+					const src = await Endpoint.from(core, patternNode, srcPath, elements[srcIndex]);
+					const dst = await Endpoint.from(core, patternNode, dstPath, elements[dstIndex]);
+					const relation = Pattern.getRelationElementForNode(core, node, src, dst);
+					// get the index for the element itself (ie, not the port ID)
+					const srcElement = Pattern.getChild(core, patternNode, src.node);
+					const srcElementIndex = elementNodes.findIndex(node => node === srcElement);
+					const dstElement = Pattern.getChild(core, patternNode, dst.node);
+					const dstElementIndex = elementNodes.findIndex(node => node === dstElement);
+					console.log(srcElementIndex, dstElementIndex, relation);
+					pattern.addRelation(srcElementIndex, dstElementIndex, relation);
 				}
-			});
-			// TODO: for each of the nodes, add it
-			// TODO: for each of the relations, add it
+
+			}, Promise.resolve());
+
+			return pattern;
+		}
+
+		static getChild(core, parent, node) {
+			let child = node;
+			while (child && core.getParent(child) !== parent) {
+				child = core.getParent(child);
+			}
+			return child;
 		}
 
 		static getElementForNode(engine, core, node) {
 			const metaType = core.getAttribute(core.getMetaType(node), 'name');
 			switch (metaType) {
 				case "ActiveNode":
-					return new engine.ActiveNode();
+					return Element.ActiveNode();
 				case "AnyNode":
-					return new engine.AnyNode();
+					return Element.AnyNode();
 				case "Attribute":
-					return new engine.Attribute();
+					return Element.Attribute();
 				case "Constant":
 					const value = core.getAttribute(node, 'value');
-					return new engine.Constant(value);
+					return Element.Constant(value);
 				case "Pointer":
-					return new engine.Pointer();
+					return Element.Pointer();
 				default:
 					throw new Error(`Unknown element type: ${metaType}`);
 			}
 		}
 
-		static getRelationElementForNode(core, node) {
+		static getRelationElementForNode(core, node, source, target) {
+			const metaType = core.getAttribute(core.getMetaType(node), 'name');
+			switch (metaType) {
+				case "has":
+					return Relation.Has();
+				case "with":
+					const srcProperty = source.getProperty();
+					const dstProperty = target.getProperty();
+					return Relation.With(srcProperty, dstProperty);
+				default:
+					throw new Error(`Unknown relation type: ${metaType}`);
+			}
+		}
+	}
+
+	class Graph {
+		constructor() {
+			this.nodes = [];
+			this.edges = [];
+			// The next fields are needed to deserialize properly to petgraph in rust
+			this.node_holes = [];
+			this.edge_property = "directed";
+		}
+
+		addNode(node) {
+			this.nodes.push(node);
+			return this.nodes.length - 1;
+		}
+
+		addEdge(srcIndex, dstIndex, weight) {
+			this.edges.push([srcIndex, dstIndex, weight]);
+		}
+	}
+
+	const Element = {};
+	Element.ActiveNode = () => ({
+		Node: 'ActiveNode'
+	});
+	Element.AnyNode = () => ({
+		Node: 'AnyNode'
+	});
+	Element.Attribute = () => 'Attribute';
+	Element.Constant = value => {
+		let primitive = {String: value};
+		if (typeof value === 'boolean') {
+			primitive = {Boolean: value};
+		} else if (typeof value === 'number') {
+			primitive = {Integer: value};  // FIXME: This should probably be a float
+		} else {
+			// TODO: 
+		}
+
+		return {
+			Constant: primitive
+		};
+	};
+
+	const Relation = {};
+	Relation.Has = () => 'Has';
+	Relation.With = (srcProperty, dstProperty) => ({With: [srcProperty, dstProperty]});
+
+	/*
+	 * A wrapper for element/GME node endpoints
+	 */
+	class Endpoint {
+		constructor(core, node, element) {
+			this.core = core;
+			this.node = node;
+			this.element = element;
+		}
+
+		name() {
+			return this.core.getAttribute(this.node, 'name');
+		}
+
+		getProperty(engine) {
+			if (this.name() === 'name') {
+				return 'Name';
+			} else {
+				return 'Value';
+			}
+		}
+
+		static async from(core, aNode, path, element) {
+			const rootNode = core.getRoot(aNode);
+			const node = await core.loadByPath(rootNode, path);
+			return new Endpoint(core, node, element);
 		}
 	}
 
