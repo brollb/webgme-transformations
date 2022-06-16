@@ -29,20 +29,75 @@
   - [ ] create a transformation utility
       - `Transformation.apply(node)`
       - return WJI??
-      - [ ] create a metamodel
+      - [x] create a metamodel
           - what should be instantiable?
             - Node (set the base)
             - Attribute
               - set the type??? Probably not needed
+          - We should prob get rid of "instantiable"
+            - it's a bit artificial since nodes don't need to set "type"
+            - also, it doesn't check "child of"
+            - should we have an "active node" in the output pattern, too?
+            - actually, if we think of `Node` as a short-hand, then it is fine
       - [ ] add a test
-      - [ ] add a test seed
-      - [ ] what is a natural format to input into the transformation?
+          - simple table example (2 column table)
+          - [x] add `ExistingNode` to meta...
+              - calling it `MatchedNode`
+            - ignore the assignment...
+          - check that we get 2 nodes (one for each attribute) with the propert things set
+
+      - [x] add a test seed
+      - [x] what is a natural format to input into the transformation?
           - GME nodes for both inputs?
-            - this can be generalized later
-          - Output can be WJI but *what IDs should we use*?
-            - @meta:<NodeName>
-            - we could use the WJI to resolve the addresses for existing nodes
-            - we could use @id for new nodes
+            - yep, this can be generalized later
+      - [ ] finish connecting the JS, rust interop
+          - we have portions working on both sides...
+          - how can we deserialize arbitrary elements? (using only c-style enums?)
+            - we can have a generic type and deserialize those
+            - we seem to be losing the `kind` field...
+              - we just have a `ptr` field.
+          - we can use `from_serde` to serialize using serde
+              - Nodes cannot be serialized/deserialized
+                - the problem is the weak refs
+              - I think we actually need a new type to pass around that can be serialized. Maybe something like a node and node dict?
+                - if we used the WJI format (ish), we could just resolve the id fields...
+                - we could pass:
+                  ```
+                  {
+                    id,
+                    attributes,
+                    pointers: {
+                      <name>: <id>
+                    },
+                    sets,
+                    children: [
+                      <child>,
+                      ...
+                    ],
+                  }
+                  ```
+                - what about any other nodes that aren't in the tree (such as the meta)? How should we pass them?
+                  - optional `context` argument?
+            - what about patterns?
+                - how would we serialize the elements?
+                  - we need some "signaling field" to know the type
+                  - we can store the rest of the data
+                  - we can actually use enums since we aren't using the ABI
+                  - edges:
+                    ```
+                    struct Edge {
+                      src: usize,  // should this be the index of the element in the list? That should actually work since we don't have hierarchy currently
+                      dst: ,
+                      relation: ,
+                    }
+                    ```
+                  - how are petgraph Graph's serialized?
+
+      - [ ] what is a natural format for output from the transformation?
+        - Output can be WJI but *what IDs should we use*?
+          - @meta:<NodeName>
+          - we could use the WJI to resolve the addresses for existing nodes
+          - we could use @id for new nodes
   - [ ] setup JS interop
     - [-] make the existing types wasm-supported
         - hide it behind a feature flag
