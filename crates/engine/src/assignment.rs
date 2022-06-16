@@ -7,8 +7,9 @@ use crate::pattern::{Element, Pattern, Property, Relation};
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
+use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Reference {
     Node(NodeId),
     Attribute(NodeId, AttributeName),
@@ -16,7 +17,7 @@ pub enum Reference {
     Set(NodeId, SetName),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Assignment {
     pub matches: HashMap<NodeIndex, Reference>,
 }

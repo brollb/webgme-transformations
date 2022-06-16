@@ -1,10 +1,11 @@
 use crate::assignment::Reference;
-use crate::gme;
-use petgraph::graph::{Graph, NodeIndex};
-
 use crate::core::Primitive;
+use crate::gme;
 
-#[derive(Clone, Eq, Hash, PartialEq, Debug)]
+use petgraph::graph::{Graph, NodeIndex};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
 pub enum Element {
     Node(Node),
     Constant(Primitive), // everything else needs to be bound
@@ -20,13 +21,13 @@ impl Element {
     }
 }
 
-#[derive(Clone, Eq, Hash, PartialEq, Debug)]
+#[derive(Clone, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
 pub enum Property {
     Name,
     Value,
 }
 
-#[derive(Clone, Eq, Hash, PartialEq, Debug)]
+#[derive(Clone, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
 pub enum Node {
     ActiveNode,
     AnyNode,
@@ -38,7 +39,7 @@ impl From<Node> for Element {
     }
 }
 
-#[derive(Clone, Eq, Hash, PartialEq, Debug)]
+#[derive(Clone, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
 pub enum Relation {
     ChildOf,                  // btwn nodes
     Has,                      // btwn node and attribute
@@ -74,6 +75,7 @@ impl Relation {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Pattern {
     pub graph: Graph<Element, Relation>,
 }

@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 
-#[derive(Clone, Eq, Hash, PartialEq, Debug)]
+#[derive(Clone, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
 pub enum Primitive {
     String(String),
     Boolean(bool),

@@ -1,18 +1,20 @@
+use crate::core::Primitive;
+
 use core::str::Split;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::rc::Weak;
 use std::{collections::HashMap, hash::Hasher, rc::Rc};
 
-use crate::core::Primitive;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Hash, Eq)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq, Deserialize, Serialize)]
 pub struct AttributeName(pub String);
-#[derive(Clone, Debug, PartialEq, Hash, Eq)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq, Deserialize, Serialize)]
 pub struct PointerName(String);
-#[derive(Clone, Debug, PartialEq, Hash, Eq)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq, Deserialize, Serialize)]
 pub struct SetName(String);
-#[derive(Clone, Debug, PartialEq, Hash, Eq)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq, Deserialize, Serialize)]
 pub struct NodeId(pub String);
 
 impl NodeId {
@@ -69,7 +71,7 @@ impl Hash for Node {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Attribute(pub Primitive);
 
 pub(crate) fn find_with_id<'a>(top_node: &'a Node, node_id: &NodeId) -> &'a Node {

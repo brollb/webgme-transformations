@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "npx es-pack build --rustwasm"
+    "build": "wasm-pack build --target no-modules && npx es-pack build --rustwasm"
   },
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "1.0.1",

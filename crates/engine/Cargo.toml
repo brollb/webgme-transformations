@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-petgraph = "0.6.0"
+petgraph = { version = "0.6.0", features = ["serde-1"] }
 derive_more = "0.99.17"
+serde = { version = "1.0.137", features = ["derive", "rc"] }
 #wasm-bindgen = { version = "0.2.63", optional = true }
 
 #[features]

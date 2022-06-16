@@ -1,7 +1,7 @@
 mod utils;
 
+use serde::Deserialize;
 use std::collections::HashMap;
-use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use webgme_pattern_engine::{find_assignments, gme, pattern, Primitive};
 
@@ -29,12 +29,16 @@ extern "C" {
     fn log_many(a: &str, b: &str);
 }
 
+// In the engine itself, GME nodes include weak refs which cannot be serialized
+// with serde. This is a simpler format which can be accepted by serde (and is
+// closer to what is used in webgme)
 #[wasm_bindgen]
+#[derive(Debug, Deserialize)]
 pub struct GMENode {
     id: String,
     is_active: Option<bool>,
     is_meta: Option<bool>,
-    attributes: HashMap<String, String>, // TODO: add support for other attribute types
+    attributes: HashMap<String, Primitive>,
     children: Vec<GMENode>,
 }
 
@@ -42,7 +46,9 @@ pub struct GMENode {
 impl GMENode {
     #[wasm_bindgen(constructor)]
     pub fn new(id: String, name: String) -> Self {
-        let attributes: HashMap<_, _> = vec![("name".to_owned(), name)].into_iter().collect();
+        let attributes: HashMap<_, _> = vec![("name".to_owned(), Primitive::String(name))]
+            .into_iter()
+            .collect();
         Self {
             id,
             is_active: Some(false),
@@ -51,11 +57,6 @@ impl GMENode {
             children: Vec::new(),
         }
     }
-
-    #[wasm_bindgen]
-    pub fn add_child(&mut self, child: GMENode) {
-        self.children.push(child);
-    }
 }
 
 impl From<GMENode> for gme::Node {
@@ -63,13 +64,9 @@ impl From<GMENode> for gme::Node {
         let attributes: HashMap<gme::AttributeName, gme::Attribute> = node
             .attributes
             .into_iter()
-            .map(|(name, val)| {
-                (
-                    gme::AttributeName(name),
-                    gme::Attribute(Primitive::String(val)),
-                )
-            })
+            .map(|(name, val)| (gme::AttributeName(name), gme::Attribute(val)))
             .collect();
+
         gme::Node {
             id: gme::NodeId(node.id),
             base: None, // TODO: add support for this
@@ -83,82 +80,15 @@ impl From<GMENode> for gme::Node {
     }
 }
 
-// pattern components
 #[wasm_bindgen]
-pub enum Element {
-    Node,
-    Edge,
-}
-
-// TODO: Should I make a generic type that then just records the name and arguments?
-// TODO: a little disappointing but should be ok
-// TODO: add an ID to these automatically? Or just return assignments in the same order?
-#[wasm_bindgen]
-pub struct Attribute;
-
-#[wasm_bindgen]
-pub struct Constant {
-    value: JsValue,
-}
-
-#[wasm_bindgen]
-pub struct Edge {
-    //src: ,
-    //dst: ,
-    //relation: ,
-}
-
-#[wasm_bindgen]
-pub struct Relation;
-
-#[wasm_bindgen]
-impl Relation {
-    #[wasm_bindgen(constructor)]
-    pub fn With() {
-        todo!();
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct Pattern {
-    //nodes: Vec<Reference>,
-    //edges: Vec<Relation>,
-}
-
-impl From<Pattern> for pattern::Pattern {
-    fn from(pattern: Pattern) -> Self {
-        todo!();
-    }
-}
-
-#[wasm_bindgen]
-impl Pattern {
-    #[wasm_bindgen(constructor)]
-    pub fn new(elements: Vec<f64>) -> Self {
-        //pub fn new(elements: Vec<Element>) -> Self {
-        // TODO:
-        todo!();
-    }
-
-    #[wasm_bindgen]
-    pub fn matches(&self, node: GMENode) {
-        let node: gme::Node = node.into();
-        let pattern: pattern::Pattern = self.clone().into();
-
-        let attr_name = gme::AttributeName(String::from("name"));
-        let name = match node
-            .attributes
-            .get(&attr_name)
-            .unwrap_or(&gme::Attribute(Primitive::String(String::from("<none>"))))
-        {
-            gme::Attribute(Primitive::String(name)) => name.to_owned(),
-            _ => String::from("WRONG TYPE"),
-        };
-
-        log(&format!("called matches with node named: {}", name));
-        let assignments = find_assignments(node, &pattern);
-        // TODO: Convert the assignments to something serializable
-        log(&format!("found {} assignments", assignments.len()));
-    }
+pub fn find_matches(node: &JsValue, pattern: &JsValue, referenced_nodes: &JsValue) -> JsValue {
+    let node = node.into_serde::<GMENode>();
+    log(&format!("node deserialization result {:?}", &node));
+    let node: GMENode = node.unwrap();
+    let pattern = pattern.into_serde::<pattern::Pattern>();
+    log(&format!("pattern deserialization result {:?}", &pattern));
+    let pattern = pattern.unwrap();
+    log(&format!("node {:?}; pattern {:?}", &node, &pattern));
+    let assignments = find_assignments(node.into(), &pattern);
+    JsValue::from_serde(&assignments).unwrap()
 }

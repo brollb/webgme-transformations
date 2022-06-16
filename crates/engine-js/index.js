@@ -52,7 +52,7 @@ engine.then(m => {
 	// Create a table of all the matching nodes
 	console.log(`found ${matches.length} matches`);
 	matches.forEach(assignments => console.log('\t', assignments));
-	const rows = matches.map(createOutputModel.bind(null, elements);
+	const rows = matches.map(createOutputModel.bind(null, elements));
 	console.log({rows});
 })
 	.catch(console.error);
