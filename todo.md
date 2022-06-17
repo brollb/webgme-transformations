@@ -24,6 +24,7 @@
     - match a node
     - match all attributes of the current node
       - convert them to rows in a table
+  - transformation into JSON domain would be better
 
 - [ ] Get a simple transformation going
   - [ ] create a transformation utility
@@ -50,7 +51,7 @@
       - [x] what is a natural format to input into the transformation?
           - GME nodes for both inputs?
             - yep, this can be generalized later
-      - [ ] finish connecting the JS, rust interop
+      - [x] finish connecting the JS, rust interop
           - we have portions working on both sides...
           - how can we deserialize arbitrary elements? (using only c-style enums?)
             - we can have a generic type and deserialize those
@@ -91,29 +92,40 @@
                       relation: ,
                     }
                     ```
-                  - how are petgraph Graph's serialized?
+                  - [x] how are petgraph Graph's serialized?
+
+      - [ ] define the output patterns
+          - Nodes should have base pointers set
+            - Convert `Node` to `AnyNode` + `base` ptr
+            - We need a way to set the base target. We could take 2 approaches:
+              - introduce `NodeConstant`
+              - allow starting from partial assignments
+
+              - the second approach is more flexible but it makes the JS code more complicated
+              - the first approach also ensures that we can "crop out" parts of the search space and don't have to worry about pkging up the nodes to be sent
+            - let's add NodeConstant for now. (These features aren't in opposition so we could add both later.)
 
       - [ ] what is a natural format for output from the transformation?
         - Output can be WJI but *what IDs should we use*?
           - @meta:<NodeName>
           - we could use the WJI to resolve the addresses for existing nodes
           - we could use @id for new nodes
-  - [ ] setup JS interop
+  - [x] setup JS interop
     - [-] make the existing types wasm-supported
         - hide it behind a feature flag
         - **wasm_bindgen only supports C-style enums**
-    - [ ] how should we actually construct non-trivial GME nodes?
+    - [x] how should we actually construct non-trivial GME nodes?
       - it might be nice to just parse the JS objects but not clear exactly how to interact with them in a meaningful way...
           - I think we should do this: https://github.com/rustwasm/wasm-bindgen/issues/964
           - We define GMENode and use serde_json
-    - [ ] make a test case
+    - [x] make a test case
       - [ ] maybe make the test case that finds two nodes with the same name?
       - [ ] should I start writing the transformation language?
         - This would help with the interface...
         - let's do it. it should probably not be tied to a plugin but rather a general utility
           - not quite sure how I want to organize the repo
 
-    - [ ] should I make it accept (slightly extended) WJI format???
+    - [-] should I make it accept (slightly extended) WJI format???
         - is_active & is_meta need to be added
         - IDs need to be resolved to actual values (or passed as dict?)
         - otherwise, that is basically it
@@ -122,8 +134,7 @@
             - JSValue, it seems
         - [ ] how to resolve the ID fields?
             - there is a resolving function in the WJI itself...
-
-  - [ ] maybe this should just be a generic transformation within GME?
+        - just make a `GMENode` class and add static factory methods for loading from WJI
 
 - [ ] split the webgme app into a separate repo
 
@@ -278,4 +289,9 @@
 
 - [x] is it possible that there is a violated constraint not detected by just checking locally?
     - I don't think so since we are eventually resolving everything...
+
+- [x] maybe this should just be a generic transformation within GME?
+
+- [x] Should we be able to hardcode node path's in a constant?
+    - I think this should be OK
 
