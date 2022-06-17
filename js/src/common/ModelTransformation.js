@@ -26,43 +26,68 @@ define(['./engine/index'], function(engineModule) {
 			// TODO
 		}
 
-		applyTransformationStep(inputPattern, outputPattern) {
-			// TODO: find all valid assignments matching the input pattern:
-				// TODO: Convert the input pattern to GME nodes
-				// TODO: find assignments (map back to GME node paths)
-			// TODO: for each assignment:
-				// TODO: create the output pattern using the assignment values
-				// TODO: sort the elements -> (parent) nodes -> attributes/pointers/etc
-		}
+		// TODO: for each assignment:
+			// TODO: create the output pattern using the assignment values
+			// TODO: sort the elements -> (parent) nodes -> attributes/pointers/etc
 
 		static async fromNode(core, node) {
-			// TODO: load the different steps (patterns)
-			const stepNodes = await core.loadChildren(node);
-			// TODO: sort by "next" pointer
+			const stepNodes = sortNodeList(core, await core.loadChildren(node), 'next');
 			console.log('steps:', stepNodes.map(c => [core.getPath(c), core.getAttribute(c, 'name')]))
 			const steps = await Promise.all(stepNodes.map(step => TransformationStep.fromNode(core, step)));
 			return new Transformation(core, steps);
 		}
+
+	}
+
+	function sortNodeList(core, nodes, ptr)  {
+		const nodeDict = Object.fromEntries(
+			nodes.map(n => [core.getPath(n), n])
+		);
+		const start = nodes.find(node => {
+			const nodePath = core.getPath(node);
+			const predecessor = nodes.find(p => core.getPointerPath(p, ptr) === nodePath);
+			return !predecessor;
+		});
+
+		const list = [];
+		let node = start;
+		while (node) {
+			if (list.includes(node)) {
+				throw new Error('Transformation steps have a cycle!');
+			}
+			list.push(node);
+			const nextPath = core.getPointerPath(node, ptr);
+			node = nodeDict[nextPath];
+		}
+
+		return list;
 	}
 
 	class TransformationStep {
-		constructor(pattern) {
+		constructor(name, pattern, outputPattern) {
+			this.name = name;
 			this.pattern = pattern;
+			this.outputPattern = outputPattern;
 		}
 
 		async apply(activeNode) {
+			console.log('---> applying step', this.name);
 			const matches = await this.pattern.matches(activeNode);
-			console.log('found matches:', JSON.stringify(matches));
-			// TODO
+			const outputs = matches.map(match => this.outputPattern.instantiate(match));
+			// TODO: For each pattern, create the structure
 		}
 
 		static async fromNode(core, node) {
 			const children = await core.loadChildren(node);
-			const inputNode = children.find(child => core.getAttribute(child, 'name'));
-			const inputPattern = await Pattern.fromNode(core, inputNode);
+			const inputNode = children.find(child => core.getAttribute(child, 'name').includes('Input'));
+			const outputNode = children.find(child => core.getAttribute(child, 'name').includes('Output'));
+			const [inputPattern, outputPattern] = await Promise.all([
+				Pattern.fromNode(core, inputNode),
+				Pattern.fromNode(core, outputNode),
+			]);
 
-			console.log('loading step for', core.getAttribute(node, 'name'));
-			return new TransformationStep(inputPattern/*, outputStructure*/);
+			const name = core.getAttribute(node, 'name');
+			return new TransformationStep(name, inputPattern, outputPattern);
 		}
 	}
 
@@ -71,7 +96,7 @@ define(['./engine/index'], function(engineModule) {
 			this.graph = new Graph();
 		}
 
-		async matches(node) {
+		async matches(node) {  // TODO: it might be nice to make this synchronous instead...
 			const engine = await getEngine();
 			console.log('(JS) pattern:', JSON.stringify(this));
 			return engine.find_matches(node, this);
@@ -89,29 +114,80 @@ define(['./engine/index'], function(engineModule) {
 			return this.graph.addEdge(srcIndex, dstIndex, relation);
 		}
 
+		// TODO: Check if it can be instantiated
+		isInstantiable() {
+			throw new Error('todo!');
+		}
+
+		instantiate(assignments) {
+			// TODO: for each node, create it
+			// TODO: sort the nodes by references?
+			console.log('instantiating with', assignments);
+		}
+
 		static async fromNode(core, patternNode) {
 			const relationType = Object.values(core.getAllMetaNodes(patternNode))
 				.find(node => core.getAttribute(node, 'name') === 'Relation');
 			const isRelation = node => core.isTypeOf(node, relationType);
 			const elementNodes = (await core.loadChildren(patternNode))
-				.sort((n1, n2) => isRelation(n1) ? 1 : -1);
+				.sort((n1, n2) => {
+					if (isRelation(n1)) return 1;
+					if (isRelation(n2)) return -1;
+					// This next bit is an unfortunate workaround for now. The upcoming logic
+					// for handling relations assumes that there is a 1:1 mapping btwn nodes
+					// and the pattern elements they resolve to. However, this isn't the case
+					// for the "Node" type since it specifies a base pointer. This is shorthand
+					// for "AnyNode" with a pointer set
+					const metaType1 = core.getAttribute(core.getMetaType(n1), 'name');
+					if (metaType1 === 'Node') return 1;
+					const metaType2 = core.getAttribute(core.getMetaType(n2), 'name');
+					if (metaType2 === 'Node') return -1;
+
+					return 0;
+				});
 
 			const pattern = new Pattern();
-			const engine = await getEngine();
-			console.log({engine});
 
 			await elementNodes.reduce(async (prev, node) => {
 				await prev;
 				if (!isRelation(node)) {
-					const element = Pattern.getElementForNode(engine, core, node);
-					pattern.addElement(element);
+					let metaType = core.getAttribute(core.getMetaType(node), 'name');
+					if (metaType === 'Node') {  // Short-hand for AnyNode with a base pointer
+						const baseId = core.getPointerPath(node, 'type');
+						const nodeElement = Element.AnyNode();
+						const pointer = Element.Pointer();
+						const ptrName = Element.Constant('base');
+						const base = Element.NodeConstant(baseId);
+						const nodeIndex = pattern.addElement(nodeElement);  // need to add this element first
+						const ptrIndex = pattern.addElement(pointer);
+						const ptrNameIndex = pattern.addElement(ptrName);
+						const baseIndex = pattern.addElement(base);
+
+						pattern.addRelation(nodeIndex, ptrIndex, Relation.Has());
+						pattern.addRelation(
+							ptrIndex,
+							ptrNameIndex,
+							Relation.With(Property.Name, Property.Value)
+						);
+						pattern.addRelation(
+							ptrIndex,
+							baseIndex,
+							Relation.With(Property.Value, Property.Value)
+						);
+					} else {
+						if (metaType === 'MatchedNode') {  // FIXME
+							metaType = 'AnyNode';
+						}
+						const element = Pattern.getElementForNode(core, node, metaType);
+						pattern.addElement(element);
+					}
 				} else {
 					const srcPath = core.getPointerPath(node, 'src');
 					const srcIndex = elementNodes.findIndex(n => core.getPath(n) === srcPath);
 					const dstPath = core.getPointerPath(node, 'dst');
 					const dstIndex = elementNodes.findIndex(n => core.getPath(n) === dstPath);
 
-
+					// FIXME: this currently assumes a 1:1 mapping btwn nodes and elements
 					const elements = pattern.getElements();
 					const src = await Endpoint.from(core, patternNode, srcPath, elements[srcIndex]);
 					const dst = await Endpoint.from(core, patternNode, dstPath, elements[dstIndex]);
@@ -121,7 +197,6 @@ define(['./engine/index'], function(engineModule) {
 					const srcElementIndex = elementNodes.findIndex(node => node === srcElement);
 					const dstElement = Pattern.getChild(core, patternNode, dst.node);
 					const dstElementIndex = elementNodes.findIndex(node => node === dstElement);
-					console.log(srcElementIndex, dstElementIndex, relation);
 					pattern.addRelation(srcElementIndex, dstElementIndex, relation);
 				}
 
@@ -138,8 +213,7 @@ define(['./engine/index'], function(engineModule) {
 			return child;
 		}
 
-		static getElementForNode(engine, core, node) {
-			const metaType = core.getAttribute(core.getMetaType(node), 'name');
+		static getElementForNode(core, node, metaType) {
 			switch (metaType) {
 				case "ActiveNode":
 					return Element.ActiveNode();
@@ -150,6 +224,10 @@ define(['./engine/index'], function(engineModule) {
 				case "Constant":
 					const value = core.getAttribute(node, 'value');
 					return Element.Constant(value);
+				//case "ExistingNode":
+					//// TODO: 
+					//const id = core.getPath(node);
+					//return Element.NodeConstant(id);
 				case "Pointer":
 					return Element.Pointer();
 				default:
@@ -166,6 +244,8 @@ define(['./engine/index'], function(engineModule) {
 					const srcProperty = source.getProperty();
 					const dstProperty = target.getProperty();
 					return Relation.With(srcProperty, dstProperty);
+				case "child of":
+					return Relation.ChildOf();
 				default:
 					throw new Error(`Unknown relation type: ${metaType}`);
 			}
@@ -199,15 +279,26 @@ define(['./engine/index'], function(engineModule) {
 		Node: 'AnyNode'
 	});
 	Element.Attribute = () => 'Attribute';
-	Element.Constant = value => {
-		return {
-			Constant: Primitive(value)
-		};
-	};
+	Element.Pointer = () => 'Pointer';
+	Element.Constant = value => ({
+		Constant: {
+			Primitive: Primitive(value)
+		}
+	});
+	Element.NodeConstant = id => ({
+		Constant: {
+			Node: id
+		}
+	});
 
 	const Relation = {};
 	Relation.Has = () => 'Has';
+	Relation.ChildOf = () => 'ChildOf';
 	Relation.With = (srcProperty, dstProperty) => ({With: [srcProperty, dstProperty]});
+
+	const Property = {};
+	Property.Name = 'Name';
+	Property.Value = 'Value';
 
 	const Primitive = value => {
 		let primitive = {String: value};
@@ -238,9 +329,9 @@ define(['./engine/index'], function(engineModule) {
 
 		getProperty(engine) {
 			if (this.name() === 'name') {
-				return 'Name';
+				return Property.Name;
 			} else {
-				return 'Value';
+				return Property.Value;
 			}
 		}
 
@@ -251,11 +342,15 @@ define(['./engine/index'], function(engineModule) {
 		}
 	}
 
+	/*
+	 * A representation of the GME node required for the rust pattern engine.
+	 */
 	class GMENode {
 		constructor(path, attributes={}) {
 			this.id = path;
 			this.attributes = attributes;
 			this.children = [];
+			this.pointers = {};  // TODO
 		}
 
 		setActiveNode(isActive=true) {

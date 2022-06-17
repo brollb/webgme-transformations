@@ -39,6 +39,7 @@ pub struct GMENode {
     is_active: Option<bool>,
     is_meta: Option<bool>,
     attributes: HashMap<String, Primitive>,
+    pointers: HashMap<String, String>,
     children: Vec<GMENode>,
 }
 
@@ -54,6 +55,7 @@ impl GMENode {
             is_active: Some(false),
             is_meta: Some(false),
             attributes,
+            pointers: HashMap::new(),
             children: Vec::new(),
         }
     }
