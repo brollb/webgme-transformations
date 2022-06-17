@@ -10,6 +10,7 @@ pub enum Element {
     Node(Node),
     Constant(Primitive), // everything else needs to be bound
     Attribute,
+    Pointer,
 }
 
 impl Element {

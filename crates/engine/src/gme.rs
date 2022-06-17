@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Hash, Eq, Deserialize, Serialize)]
 pub struct AttributeName(pub String);
 #[derive(Clone, Debug, PartialEq, Hash, Eq, Deserialize, Serialize)]
-pub struct PointerName(String);
+pub struct PointerName(pub String);
 #[derive(Clone, Debug, PartialEq, Hash, Eq, Deserialize, Serialize)]
 pub struct SetName(String);
 #[derive(Clone, Debug, PartialEq, Hash, Eq, Deserialize, Serialize)]

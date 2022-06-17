@@ -77,7 +77,6 @@ fn get_valid_targets<'a>(
             //  - if so, retrieve the attribute (applying the constraints)
             //  - if not, error for now?
             //    - it probably can be resolved to all node/attribute combos
-            // TODO: get the node then the attributes
             let edges = pattern
                 .graph
                 .edges_directed(element_idx, Direction::Incoming);
@@ -119,12 +118,59 @@ fn get_valid_targets<'a>(
                 top_attrs.chain(desc_attrs).collect()
             };
 
-            println!(
-                "About to get attributes from {} candidates",
-                candidates.len()
-            );
             Box::new(candidates.into_iter().filter_map(move |(node, attr)| {
                 let gme_ref = Reference::Attribute(node.id.clone(), attr.clone());
+                if assignment.is_valid_target(pattern, top_node, element_idx, &gme_ref) {
+                    Some(gme_ref)
+                } else {
+                    None
+                }
+            }))
+        }
+        Element::Pointer => {
+            let edges = pattern
+                .graph
+                .edges_directed(element_idx, Direction::Incoming);
+
+            let mut node_refs = edges.filter_map(|e| match e.weight() {
+                Relation::Has => {
+                    let node_index = e.source();
+                    assignment.matches.get(&node_index)
+                }
+                _ => None,
+            });
+            let node = node_refs.next().map(|node_ref| match node_ref {
+                Reference::Node(node_id) => find_with_id(top_node, node_id),
+                _ => panic!(
+                    "Resolved Element::Node to non-gme::Node type: {:?}",
+                    node_ref
+                ),
+            });
+
+            if node_refs.next().is_some() {
+                return Box::new(std::iter::empty());
+            }
+
+            // apply the constraints
+            let candidates: Vec<_> = if let Some(node) = node {
+                node.pointers
+                    .keys()
+                    .map(|pointer| (Rc::new(node.clone()), pointer))
+                    .collect()
+            } else {
+                let top_ptrs = top_node
+                    .pointers
+                    .keys()
+                    .map(|pointer| (top_node.clone(), pointer));
+                let desc_ptrs = top_node
+                    .descendents()
+                    .flat_map(|node| node.pointers.keys().map(|pointer| (node.clone(), pointer)));
+
+                top_ptrs.chain(desc_ptrs).collect()
+            };
+
+            Box::new(candidates.into_iter().filter_map(move |(node, pointer)| {
+                let gme_ref = Reference::Pointer(node.id.clone(), pointer.clone());
                 if assignment.is_valid_target(pattern, top_node, element_idx, &gme_ref) {
                     Some(gme_ref)
                 } else {
@@ -210,7 +256,7 @@ fn add_match_to_assignment(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gme::{AttributeName, NodeId};
+    use crate::gme::{AttributeName, NodeId, PointerName};
     use crate::{
         core::Primitive,
         pattern::{Property, Relation},
@@ -218,6 +264,7 @@ mod tests {
     use petgraph::Graph;
     use std::collections::HashMap;
     use std::rc::Rc;
+    use std::rc::Weak;
 
     #[test]
     fn detect_active_node_child() {
@@ -637,5 +684,162 @@ mod tests {
         };
         let assignments = find_assignments(gme_node, &pattern);
         assert_eq!(assignments.len(), 3);
+    }
+
+    #[test]
+    fn detect_pointer_target() {
+        let mut graph = Graph::new();
+        let ptr = graph.add_node(Element::Pointer.into());
+        let ptr_name =
+            graph.add_node(Element::Constant(Primitive::String(String::from("src"))).into());
+
+        graph.add_edge(
+            ptr,
+            ptr_name,
+            Relation::With(Property::Name, Property::Value),
+        );
+
+        // Target should be a node with an attribute set to "target"
+        let target = graph.add_node(Element::Node(Node::AnyNode).into());
+        let target_attr = graph.add_node(Element::Attribute.into());
+        let target_val =
+            graph.add_node(Element::Constant(Primitive::String(String::from("target"))).into());
+
+        graph.add_edge(target, target_attr, Relation::Has);
+        graph.add_edge(
+            target_attr,
+            target_val,
+            Relation::With(Property::Value, Property::Value),
+        );
+        graph.add_edge(
+            ptr,
+            target,
+            Relation::With(Property::Value, Property::Value),
+        );
+
+        let pattern = Pattern::new(graph);
+
+        // Find a GME node with the given pointer target
+        let mut attributes = HashMap::new();
+        let attr = gme::Attribute(Primitive::String(String::from("target")));
+        attributes.insert(AttributeName(String::from("some_attr")), attr);
+        let child1 = gme::Node {
+            id: NodeId::new(String::from("/a/d/ptr_tgt")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes,
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: Vec::new(),
+        };
+
+        let mut attributes = HashMap::new();
+        let attr = gme::Attribute(Primitive::String(String::from("ChildNode2")));
+        attributes.insert(AttributeName(String::from("name")), attr);
+        let target = Rc::new(child1);
+        let pointers: HashMap<_, _> =
+            vec![(PointerName(String::from("src")), Rc::downgrade(&target))]
+                .into_iter()
+                .collect();
+        let child2 = gme::Node {
+            id: NodeId::new(String::from("/a/d/ptr_origin")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes,
+            pointers,
+            sets: HashMap::new(),
+            children: Vec::new(),
+        };
+        let mut attributes = HashMap::new();
+        let attr = gme::Attribute(Primitive::String(String::from("NodeName")));
+        attributes.insert(AttributeName(String::from("name")), attr);
+        let gme_node = gme::Node {
+            id: NodeId::new(String::from("/a/d")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes,
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: vec![target, Rc::new(child2)],
+        };
+
+        let assignments = find_assignments(gme_node, &pattern);
+        assert_eq!(assignments.len(), 1);
+        let assignment = assignments.get(0).unwrap();
+        match assignment.matches.get(&ptr).unwrap() {
+            Reference::Pointer(node_id, name) => {
+                assert_eq!(node_id.0, String::from("/a/d/ptr_origin"));
+                assert_eq!(name.0, String::from("src"));
+            }
+            _ => panic!("Incorrect pointer assignment"),
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn detect_pointer_exists() {
+        let mut graph = Graph::new();
+        let ptr = graph.add_node(Element::Pointer.into());
+        let ptr_name =
+            graph.add_node(Element::Constant(Primitive::String(String::from("src"))).into());
+
+        graph.add_edge(
+            ptr,
+            ptr_name,
+            Relation::With(Property::Name, Property::Value),
+        );
+
+        let pattern = Pattern::new(graph);
+
+        // Find a GME node with a src pointer (unset)
+        let mut attributes = HashMap::new();
+        let attr = gme::Attribute(Primitive::String(String::from("ChildNode1")));
+        attributes.insert(AttributeName(String::from("name")), attr);
+        let child1 = gme::Node {
+            id: NodeId::new(String::from("/a/d/child_1")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes,
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: Vec::new(),
+        };
+
+        let mut attributes = HashMap::new();
+        let attr = gme::Attribute(Primitive::String(String::from("ChildNode2")));
+        attributes.insert(AttributeName(String::from("name")), attr);
+        let pointers: HashMap<_, _> = vec![(PointerName(String::from("src")), Weak::new())]
+            .into_iter()
+            .collect();
+        let child2 = gme::Node {
+            id: NodeId::new(String::from("/a/d/child_2")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes,
+            pointers,
+            sets: HashMap::new(),
+            children: Vec::new(),
+        };
+        let mut attributes = HashMap::new();
+        let attr = gme::Attribute(Primitive::String(String::from("NodeName")));
+        attributes.insert(AttributeName(String::from("name")), attr);
+        let gme_node = gme::Node {
+            id: NodeId::new(String::from("/a/d")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes,
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: vec![Rc::new(child1), Rc::new(child2)],
+        };
+
+        let assignments = find_assignments(gme_node, &pattern);
+        assert_eq!(assignments.len(), 1);
     }
 }
