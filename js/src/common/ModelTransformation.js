@@ -8,17 +8,20 @@ define(['./engine/index'], function(engineModule) {
 	}
 
 	class Transformation {
-		constructor(steps) {
+		constructor(core, steps) {
+			this.core = core;
 			this.steps = steps;
 			// TODO: We may want to create an interface to use with the core (like Umesh mentioned a while ago) so
 			// this can create WJI or GME nodes. Technically, WJI can be imported but this has decent perf overhead.
 			// First, we should just see if we can optimize WJI
 		}
 
-		apply(activeNode) {
+		async apply(activeNode) {
+			const node = await GMENode.fromNode(this.core, activeNode);
+			node.setActiveNode();
 			this.steps.reduce(async (refDataP, step) => {
 				const refData = await refDataP;
-				return step.apply(activeNode);
+				return step.apply(node);
 			}, Promise.resolve());
 			// TODO
 		}
@@ -38,7 +41,7 @@ define(['./engine/index'], function(engineModule) {
 			// TODO: sort by "next" pointer
 			console.log('steps:', stepNodes.map(c => [core.getPath(c), core.getAttribute(c, 'name')]))
 			const steps = await Promise.all(stepNodes.map(step => TransformationStep.fromNode(core, step)));
-			return new Transformation(steps);
+			return new Transformation(core, steps);
 		}
 	}
 
@@ -49,7 +52,7 @@ define(['./engine/index'], function(engineModule) {
 
 		async apply(activeNode) {
 			const matches = await this.pattern.matches(activeNode);
-			console.log('found matches:', matches);
+			console.log('found matches:', JSON.stringify(matches));
 			// TODO
 		}
 
@@ -197,6 +200,16 @@ define(['./engine/index'], function(engineModule) {
 	});
 	Element.Attribute = () => 'Attribute';
 	Element.Constant = value => {
+		return {
+			Constant: Primitive(value)
+		};
+	};
+
+	const Relation = {};
+	Relation.Has = () => 'Has';
+	Relation.With = (srcProperty, dstProperty) => ({With: [srcProperty, dstProperty]});
+
+	const Primitive = value => {
 		let primitive = {String: value};
 		if (typeof value === 'boolean') {
 			primitive = {Boolean: value};
@@ -206,14 +219,8 @@ define(['./engine/index'], function(engineModule) {
 			// TODO: 
 		}
 
-		return {
-			Constant: primitive
-		};
+		return primitive;
 	};
-
-	const Relation = {};
-	Relation.Has = () => 'Has';
-	Relation.With = (srcProperty, dstProperty) => ({With: [srcProperty, dstProperty]});
 
 	/*
 	 * A wrapper for element/GME node endpoints
@@ -241,6 +248,30 @@ define(['./engine/index'], function(engineModule) {
 			const rootNode = core.getRoot(aNode);
 			const node = await core.loadByPath(rootNode, path);
 			return new Endpoint(core, node, element);
+		}
+	}
+
+	class GMENode {
+		constructor(path, attributes={}) {
+			this.id = path;
+			this.attributes = attributes;
+			this.children = [];
+		}
+
+		setActiveNode(isActive=true) {
+			this.is_active = isActive;
+		}
+
+		static async fromNode(core, node) {
+			const children = await core.loadChildren(node);
+			const attributes = Object.fromEntries(
+				core.getOwnAttributeNames(node)
+					.map(name => [name, Primitive(core.getAttribute(node, name))])
+			);
+			const gmeNode = new GMENode(core.getPath(node), attributes);
+			gmeNode.children = await Promise.all(children.map(child => GMENode.fromNode(core, child)));
+			// TODO: Add pointers, etc
+			return gmeNode;
 		}
 	}
 
