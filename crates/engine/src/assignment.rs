@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::core::Primitive;
 use crate::gme;
 use crate::gme::{AttributeName, NodeId, PointerName, SetName};
-use crate::pattern::{Element, Pattern, Property, Relation};
+use crate::pattern::{Constant, Element, Pattern, Property, Relation};
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
@@ -126,7 +126,10 @@ impl<'a> Assignment {
                     let gme_ref_val = self.get_ptr_attr_value(top_node, gme_ref, gme_ref_prop);
                     let other_element = &pattern.graph[*index];
                     let other_val = match other_element {
-                        Element::Constant(prim) => Some(prim.clone()),
+                        Element::Constant(constant) => match constant {
+                            Constant::Primitive(prim) => Some(prim.clone()),
+                            Constant::Node(node_id) => Some(Primitive::String(node_id.0.clone())),
+                        },
                         _ => self.matches.get(index).map(|other_ref| {
                             self.get_ptr_attr_value(top_node, other_ref, other_prop)
                         }),

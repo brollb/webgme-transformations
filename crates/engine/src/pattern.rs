@@ -8,9 +8,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
 pub enum Element {
     Node(Node),
-    Constant(Primitive), // everything else needs to be bound
+    Constant(Constant), // everything else needs to be bound
     Attribute,
     Pointer,
+}
+
+#[derive(Clone, Eq, Hash, PartialEq, Debug, Deserialize, Serialize)]
+pub enum Constant {
+    Primitive(Primitive),
+    Node(gme::NodeId),
 }
 
 impl Element {
