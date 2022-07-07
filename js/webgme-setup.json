@@ -4,9 +4,16 @@
       "test": {
         "src": "src/seeds/test"
       }
+    },
+    "plugins": {
+      "ApplyModelTransformation": {
+        "src": "src/plugins/ApplyModelTransformation",
+        "test": "test/plugins/ApplyModelTransformation"
+      }
     }
   },
   "dependencies": {
-    "seeds": {}
+    "seeds": {},
+    "plugins": {}
   }
 }

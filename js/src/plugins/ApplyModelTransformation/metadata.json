@@ -1,0 +1,25 @@
+{
+  "id": "ApplyModelTransformation",
+  "name": "ApplyModelTransformation",
+  "version": "0.1.0",
+  "description": "",
+  "icon": {
+    "class": "glyphicon glyphicon-cog",
+    "src": ""
+  },
+  "disableServerSideExecution": false,
+  "disableBrowserSideExecution": false,
+  "dependencies": [],
+  "writeAccessRequired": false,
+  "configStructure": [
+    {
+      "name": "transformPath",
+      "displayName": "Transformation Path",
+      "regex": "^/[a-z0-9](/[a-z0-9])*",
+      "regexMessage": "Not a valid node path. Expected something like /a/0/k",
+      "description": "Node path of the transformation node.",
+      "valueType": "string",
+      "readOnly": false
+    }
+  ]
+}

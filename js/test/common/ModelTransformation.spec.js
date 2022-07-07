@@ -97,9 +97,6 @@ describe('ModelTransformation', function () {
             const node = elements.find(e => e.type.Node);
             assert.equal(node.type.Node, 'AnyNode');
         });
-
-        //it('should instantiate', async function() {
-        //});
     });
 
     describe('simple table example', function() {
