@@ -19,11 +19,23 @@ define(['./engine/index'], function(engineModule) {
 		async apply(activeNode) {
 			const node = await GMENode.fromNode(this.core, activeNode);
 			node.setActiveNode();
-			this.steps.reduce(async (refDataP, step) => {
+			const createdNodes = {};
+			const newNodes = await this.steps.reduce(async (refDataP, step) => {
 				const refData = await refDataP;
-				return refData.concat(step.apply(node, activeNode));
+				const matchOutputs = await step.apply(node, activeNode, createdNodes);
+				return refData.concat(...matchOutputs);
 			}, Promise.resolve([]));
-			// TODO
+
+			return this._toTree(newNodes);
+		}
+
+		_toTree(nodes) {
+			const [roots, children] = partition(nodes, node => !node.parent);
+			children.forEach(child => {
+				child.parent.children.push(child);
+				delete child.parent;
+			});
+			return roots;
 		}
 
 		// TODO: for each assignment:
@@ -36,7 +48,6 @@ define(['./engine/index'], function(engineModule) {
 			const steps = await Promise.all(stepNodes.map(step => TransformationStep.fromNode(core, step)));
 			return new Transformation(core, steps);
 		}
-
 	}
 
 	function sortNodeList(core, nodes, ptr)  {
@@ -68,17 +79,16 @@ define(['./engine/index'], function(engineModule) {
 			this.name = name;
 			this.core = core;
 			this.pattern = pattern;
+			this.pattern.ensureCanMatch();
 			this.outputPattern = outputPattern;
 		}
 
-		async apply(node, gmeNode) {
+		async apply(node, gmeNode, createdNodes={}) {
 			console.log('---> applying step', this.name);
 			const matches = await this.pattern.matches(node);
-			// TODO: how should these be applied?
 			const outputs = await Promise.all(matches.map(
-				(match, index) => this.outputPattern.instantiate(this.core, gmeNode, match, index)
+				(match, index) => this.outputPattern.instantiate(this.core, gmeNode, match, createdNodes, index)
 			));
-			console.log('output of', this.name, JSON.stringify(outputs, null, 2));
 			return outputs;
 		}
 
@@ -91,6 +101,7 @@ define(['./engine/index'], function(engineModule) {
 				Pattern.fromNode(core, outputNode),
 			]);
 
+			console.log('input node path:', core.getPath(inputNode));
 			const name = core.getAttribute(node, 'name');
 			return new TransformationStep(name, core, inputPattern, outputPattern);
 		}
@@ -105,12 +116,23 @@ define(['./engine/index'], function(engineModule) {
 
 		async matches(node) {  // TODO: it might be nice to make this synchronous instead...
 			const engine = await getEngine();
-			const assignments = engine.find_matches(node, this.toEnginePattern());
+			this.ensureCanMatch();
+			const assignments = engine.find_matches(node, this.toEngineJSON());
 			return assignments.map(a => mapKeys(a.matches, k => this.nodePaths[k]));
 		}
 
-		toEnginePattern() {
-			return {graph: this.graph};
+		ensureCanMatch() {
+			this.getElements().forEach(
+				element => assert(
+					!element?.Node?.MatchedNode,
+					'Matched nodes cannot be in input patterns: ' + JSON.stringify(element)
+				)
+			);
+		}
+
+		toEngineJSON() {
+			const graph = this.graph.toEngineJSON();
+			return {graph};
 		}
 
 		addElement(node, nodePath) {
@@ -144,56 +166,98 @@ define(['./engine/index'], function(engineModule) {
 			return edges;
 		}
 
-		// TODO: Check if it can be instantiated
-		isInstantiable() {
-			throw new Error('todo!');
+		getAllRelations() {
+			return this.graph.edges.concat(this.externalRelations);
 		}
 
-		async instantiate(core, node, assignments, idPrefix='node') {
-			// TODO: make the WJI format for these
-			console.log(this.externalRelations);
+		async instantiate(core, node, assignments, createdNodes, idPrefix='node') {
 			const elements = this.getElements().map((element, i) => [element, i]);
-			const [nodeElements, otherElements] = partition(elements, ([e, i]) => e.Node);
+			const [nodeElements, otherElements] = partition(elements, ([e, i]) => e.type.Node);
 			const nodeIdFor = index => `@id:${idPrefix}_${index}`;
-			const nodes = nodeElements.map(([element, index]) => ({
-				id: nodeIdFor(index),
-				attributes: {},
-				pointers: {},
-			}));
 
-			const updateElements = otherElements.filter(([e, i]) => !e.Constant);
+			const [matchedNodeElements, otherNodeElements] = partition(
+				nodeElements,
+				([element]) => element.type?.Node?.MatchedNode
+			);
+			const matchedNodes = matchedNodeElements
+				.map(([element, index]) => {
+					// Resolving matched nodes is a little involved. We need to:
+					//   - find the input element being referenced
+					//   - resolve it to the match from the assignments
+					//   - look up the createdNode corresponding to that match
+					const inputElementPath = element.type?.Node?.MatchedNode;
+					const modelElement = assignments[inputElementPath];
+					const nodePath = modelElement.Node;
+					assert(
+						createdNodes[nodePath],
+						new NoMatchedNodeError(nodePath)
+					);
+					return [createdNodes[nodePath], index];
+				})
+
+			const newNodes = otherNodeElements.map(([element, index]) => {
+				const node = {
+					id: nodeIdFor(index),
+					attributes: {},
+					pointers: {},
+					children: [],
+				};
+
+				if (assignments[element.originPath]) {
+					const assignedElement = assignments[element.originPath];
+					assert(assignedElement.Node, new UnimplementedError('Referencing non-Node origins'));
+					const nodePath = assignedElement.Node;
+					createdNodes[nodePath] = node;
+				}
+				return [node, index];
+			});
+
+			const nodes = newNodes.concat(matchedNodes);
+			const getNodeAt = index => {
+				const nodePair = nodes.find(([n, i]) => i === index);
+				assert(nodePair);
+				return nodePair[0];
+			};
+
+			console.log({nodes});
+			const updateElements = otherElements.filter(([e, i]) => !e.type.Constant);
 			await updateElements.reduce(async (prev, [element, index]) => {
 				await prev;
 				const [outEdges, inEdges] = this.getRelationsWith(index);
-				if (element === 'Attribute' || element === 'Pointer') {
+				if (element.type === 'Attribute' || element.type === 'Pointer') {
 					const [[hasEdge], otherEdges] = partition(inEdges, ([src, dst, relation]) => relation === 'Has');
 					assert(
 						hasEdge,
-						new UninstantiableError(`${element} missing source node ("Has" relation)`)
+						new UninstantiableError(`${element.type} missing source node ("Has" relation)`)
 					);
-					const nodeWJI = nodes.find(n => n.id === nodeIdFor(hasEdge[0]));
+
+					const nodeWJI = getNodeAt(hasEdge[0]);
 					const [nameTuple, valueTuple] = getNameValueTupleFor(index, otherEdges.concat(outEdges));
 					const rootNode = core.getRoot(node);
 					const name = await this.resolveNodeProperty(core, rootNode, assignments, ...nameTuple);
 					const targetPath = await this.resolveNodeProperty(core, rootNode, assignments, ...valueTuple);
-					console.log('setting', name, 'to', targetPath);
-					const field = element === 'Attribute' ? 'attributes' : 'pointers';
+					const field = element.type === 'Attribute' ? 'attributes' : 'pointers';
 					nodeWJI[field][name] = targetPath;
 				} else {
-					throw new Error(`Unsupported element to instantiate: ${element}`);
+					throw new Error(`Unsupported element to instantiate: ${JSON.stringify(element)}`);
 				}
 			}, Promise.resolve());
 
-			// TODO: for each node, create it
-			// TODO: sort the nodes by references?
-			console.log('instantiating with', JSON.stringify(assignments));
-			return nodes;
+			// add child of relations
+			const childRelations = this.getAllRelations()
+				.filter(([src, dst, relation]) => relation === 'ChildOf')
+				.map(([src, dst]) => {
+					const dstNode = getNodeAt(dst);
+					const srcNode = getNodeAt(src);
+					srcNode.parent = dstNode;
+				});
+
+			return newNodes.map(([node, index]) => node);
 		}
 
 		async resolveNodeProperty(core, rootNode, assignments, indexOrNodePath, property) {
 			const isNodePath = typeof indexOrNodePath === 'string';
 			if (isNodePath) {
-				console.log('RECEIVED NODE PATH!!!!', indexOrNodePath, property, assignments);
 				const node = await core.loadByPath(rootNode, indexOrNodePath);
 				const elementNode = Pattern.getPatternChild(core, node);
 				const elementType = core.getAttribute(core.getMetaType(elementNode), 'name');
@@ -221,14 +285,12 @@ define(['./engine/index'], function(engineModule) {
 				} else {
 				}
 			} else {
-				// TODO: resolve the 
 				const element = this.getElements()[indexOrNodePath];
-				if (element.Constant?.Primitive) {
-					return Object.values(element.Constant.Primitive).pop();
-				} else if (element.Constant?.Node) {
-					return element.Constant.Node;
+				if (element.type.Constant?.Primitive) {
+					return Object.values(element.type.Constant.Primitive).pop();
+				} else if (element.type.Constant?.Node) {
+					return element.type.Constant.Node;
 				} else {
-					console.log(element);
 					assert(false, new Error(`Unknown element type`));
 				}
 			}
@@ -247,6 +309,7 @@ define(['./engine/index'], function(engineModule) {
 					// and the pattern elements they resolve to. However, this isn't the case
 					// for the "Node" type since it specifies a base pointer. This is shorthand
 					// for "AnyNode" with a pointer set
+					// FIXME: Splice the elements instead to make sure the indices are correct
 					const metaType1 = core.getAttribute(core.getMetaType(n1), 'name');
 					if (metaType1 === 'Node') return 1;
 					const metaType2 = core.getAttribute(core.getMetaType(n2), 'name');
@@ -259,14 +322,16 @@ define(['./engine/index'], function(engineModule) {
 
 			await elementNodes.reduce(async (prev, node) => {
 				await prev;
+				const nodePath = core.getPath(node);
 				if (!isRelation(node)) {
 					let metaType = core.getAttribute(core.getMetaType(node), 'name');
 					if (metaType === 'Node') {  // Short-hand for AnyNode with a base pointer
+						const originPath = core.getPointerPath(node, 'origin');
 						const baseId = core.getPointerPath(node, 'type');
-						const nodeElement = Element.AnyNode();
-						const pointer = Element.Pointer();
-						const ptrName = Element.Constant('base');
-						const base = Element.NodeConstant(baseId);
+						const nodeElement = new Element(ElementType.AnyNode(), nodePath, originPath);
+						const pointer = new Element(ElementType.Pointer());
+						const ptrName = new Element(ElementType.Constant('base'));
+						const base = new Element(ElementType.NodeConstant(baseId));
 						const nodeIndex = pattern.addElement(nodeElement, core.getPath(node));  // need to add this element first
 						const ptrIndex = pattern.addElement(pointer);
 						const ptrNameIndex = pattern.addElement(ptrName);
@@ -284,9 +349,6 @@ define(['./engine/index'], function(engineModule) {
 							Relation.With(Property.Value, Property.Value)
 						);
 					} else {
-						if (metaType === 'MatchedNode') {  // FIXME
-							metaType = 'AnyNode';
-						}
 						const element = Pattern.getElementForNode(core, node, metaType);
 						pattern.addElement(element, core.getPath(node));
 					}
@@ -312,9 +374,7 @@ define(['./engine/index'], function(engineModule) {
 					} else {
 						const src = srcElementIndex === -1 ? srcPath : srcElementIndex;
 						const dst = dstElementIndex === -1 ? dstPath : dstElementIndex;
-						console.log('cross pattern relation');
 						const patternPath = core.getPath(patternNode);
-						console.log({src, dst, relation, srcElementIndex, srcPath, patternPath});
 						pattern.addCrossPatternRelation(src, dst, relation);
 					}
 				}
@@ -337,22 +397,33 @@ define(['./engine/index'], function(engineModule) {
 		}
 
 		static getElementForNode(core, node, metaType) {
+			const type = Pattern.getElementTypeForNode(core, node, metaType);
+			const nodePath = core.getPath(node);
+			const originPath = core.getPointerPath(node, 'origin');
+			// FIXME: this should be the origin target -> not the node path
+			return new Element(type, nodePath, originPath);
+		}
+
+		static getElementTypeForNode(core, node, metaType) {
 			switch (metaType) {
 				case "ActiveNode":
-					return Element.ActiveNode();
+					return ElementType.ActiveNode();
 				case "AnyNode":
-					return Element.AnyNode();
+					return ElementType.AnyNode();
 				case "Attribute":
-					return Element.Attribute();
+					return ElementType.Attribute();
 				case "Constant":
 					const value = core.getAttribute(node, 'value');
-					return Element.Constant(value);
+					return ElementType.Constant(value);
+				case "MatchedNode":
+					const matchPath = core.getPointerPath(node, 'match');
+					return ElementType.MatchedNode(matchPath);
 				//case "ExistingNode":
 					//// TODO: 
 					//const id = core.getPath(node);
 					//return Element.NodeConstant(id);
 				case "Pointer":
-					return Element.Pointer();
+					return ElementType.Pointer();
 				default:
 					throw new Error(`Unknown element type: ${metaType}`);
 			}
@@ -408,27 +479,47 @@ define(['./engine/index'], function(engineModule) {
 
 			return edges;
 		}
+
+		toEngineJSON() {
+			return {
+				nodes: this.nodes.map(element => element.type),
+				edges: this.edges,
+				node_holes: this.node_holes,
+				edge_property: this.edge_property,
+			};
+		}
 	}
 
-	const Element = {};
-	Element.ActiveNode = () => ({
+	const ElementType = {};
+	ElementType.ActiveNode = () => ({
 		Node: 'ActiveNode'
 	});
-	Element.AnyNode = () => ({
+	ElementType.AnyNode = () => ({
 		Node: 'AnyNode'
 	});
-	Element.Attribute = () => 'Attribute';
-	Element.Pointer = () => 'Pointer';
-	Element.Constant = value => ({
+	ElementType.MatchedNode = matchPath => ({
+		Node: { MatchedNode: matchPath }
+	});
+	ElementType.Attribute = () => 'Attribute';
+	ElementType.Pointer = () => 'Pointer';
+	ElementType.Constant = value => ({
 		Constant: {
 			Primitive: Primitive(value)
 		}
 	});
-	Element.NodeConstant = id => ({
+	ElementType.NodeConstant = id => ({
 		Constant: {
 			Node: id
 		}
 	});
+
+	class Element {
+		constructor(type, nodePath, originPath) {
+			this.type = type;
+			this.nodePath = nodePath;
+			this.originPath = originPath;
+		}
+	}
 
 	const Relation = {};
 	Relation.Has = () => 'Has';
@@ -466,7 +557,7 @@ define(['./engine/index'], function(engineModule) {
 			return this.core.getAttribute(this.node, 'name');
 		}
 
-		getProperty(engine) {
+		getProperty() {
 			if (this.name() === 'name') {
 				return Property.Name;
 			} else {
@@ -549,5 +640,20 @@ define(['./engine/index'], function(engineModule) {
 	}
 
 	class UninstantiableError extends Error {}
+	class NoMatchedNodeError extends Error {
+		constructor(nodePath) {
+			super(`Could not find node created (in previous step) for ${nodePath}`);
+			this.nodePath = nodePath;
+		}
+	}
+
+	class UnimplementedError extends Error {
+		constructor(action) {
+			super(`${action} not yet supported.`);
+			this.action = action;
+		}
+	}
+
+	Transformation.Pattern = Pattern;
 	return Transformation;
 });

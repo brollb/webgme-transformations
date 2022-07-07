@@ -7,6 +7,7 @@ describe('ModelTransformation', function () {
     const _ = testFixture.requirejs('underscore');
     const Core = testFixture.requirejs('common/core/coreQ');
     const Transformation = testFixture.requirejs('webgme-transformations/ModelTransformation');
+    const {Pattern} = Transformation;
     const assert = require('assert');
     const gmeConfig = testFixture.getGmeConfig();
     const path = testFixture.path;
@@ -33,9 +34,7 @@ describe('ModelTransformation', function () {
             gmeConfig: gmeConfig
         };
 
-        console.log('about to import');
         const importResult = await testFixture.importProject(storage, importParam);
-        console.log('import complete');
         project = importResult.project;
         core = new Core(project, {
             globConf: gmeConfig,
@@ -64,12 +63,19 @@ describe('ModelTransformation', function () {
         root,
         fco;
 
-    async function getNodeByName(name) {
-        const children = await core.loadChildren(root);
-        const node = children.find(c => core.getAttribute(c, 'name') === name);
-        if (!node) {
-            throw new Error(`Could not find node named ${name}`);
-        }
+    async function getNodeByName(...names) {
+        const node = names.reduce(async (getParent, name) => {
+            const parent = await getParent;
+            const children = await core.loadChildren(parent);
+            const node = children.find(c => core.getAttribute(c, 'name') === name)
+
+            if (!node) {
+                throw new Error(`Could not find node named ${names.join(' > ')}`);
+            }
+
+            return node;
+        }, root);
+
         return node;
     }
 
@@ -78,14 +84,69 @@ describe('ModelTransformation', function () {
         fco = await core.loadByPath(root, '/1');
     });
 
+    describe('Pattern', function() {
+        it('should transform (typed) Node -> AnyNode', async function() {
+            const patternNode = await getNodeByName('AttributeTable', 'CreateTable', 'OutputStructure');
+            const outputPattern = await Pattern.fromNode(core, patternNode);
+            const elements = outputPattern.getElements();
+            assert.equal(
+                elements.filter(e => e.type.Node).length,
+                1,
+                'Found more than 1 node element in output pattern'
+            );
+            const node = elements.find(e => e.type.Node);
+            assert.equal(node.type.Node, 'AnyNode');
+        });
+
+        //it('should instantiate', async function() {
+        //});
+    });
+
     describe('simple table example', function() {
-        it('should create nodes (rows) for each attribute', async function() {
+        let outputNodes;
+        beforeEach(async () => {
             const node = await getNodeByName('AttributeTable');
             const transformation = await Transformation.fromNode(core, node);
             const model = await getNodeByName('NodeWithTwoAttributes');
-            const output = await transformation.apply(model);
-            console.log({output});
-            assert(false, 'todo!');
+            outputNodes = await transformation.apply(model);
+        });
+
+        it('should create nodes (rows) for each attribute', async function() {
+            const allNodes = flatten(outputNodes, node => node.children);
+            const rows = allNodes.filter(node => node.pointers.base === '/O');
+            assert.equal(rows.length, 2);
+        });
+
+        function flatten(list, fn) {
+            return list.reduce((l, node) => l.concat(flatten(fn(node), fn)), list);
+        }
+
+        it('should create rows as children', async function() {
+            const [table] = outputNodes;
+            table.children.every(node => node.pointers.base === '/O');
+        });
+
+        it('should create a single table', async function() {
+            assert.equal(outputNodes.length, 1);
+        });
+
+        it('should only create nodes with a base pointer', async function() {
+            const withoutBasePtr = node => {
+                if (!node.pointers.base) {
+                    return node;
+                }
+                return node.children?.find(withoutBasePtr);
+            };
+            const invalidNode = outputNodes.find(n => withoutBasePtr(n));
+            assert(
+                !invalidNode,
+                `Found node without base pointer: ${JSON.stringify(invalidNode)}`
+            );
+        });
+
+        it('should not create nodes w/ same ID', async function() {
+            const uniqNodes = _.uniq(outputNodes, false, node => node.id);
+            assert.equal(uniqNodes.length, outputNodes.length);
         });
     });
 });
