@@ -14,17 +14,40 @@
 - sequence of patterns to apply (manage complexity)
 - all nodes should be instantiable
 - should be able to ref nodes from earlier matches
-    - `ExistingNode`
+    - `ExistingNode`/`MatchedNode`?
+        - how should these be stored?
+          - store the new node by the path of the assignment for the given node
+          - active node (/element) is referenced by an output element (/output). /element is resolved to /active which previously created /new_active_output.
+              - the lookup dictionary (+path) for /output:
+                  - /output -ref-> /element -assignments-> /active -createdNodes-> /new_active_output
+          - if there is no resolved node, then the pattern should not be instantiated
+          - it is kinda like another match just at a different level
     - `Node` output type can optionally have a `ref`/`id`/`origin` reference
+    - How exactly is it stored?
+      - we need to optionally add a "correspondsTo" reference (or "derivedFrom")
+      - should this be a connection or a reference?
+          - probably a connection since it can have many targets...
+          - otherwise, it could be a mixin for output elements
+            - it would be weird to have it available for elements in input patterns
+          - How about a connection that can only be created in the output pattern?
+
+- How should we capture constraints like a connection's 
 
 ## To Do
 - let's start with some motivating (simplistic) examples
-  - how about a visualizer that converts the data to a (row in a) table
+  - [-] how about a visualizer that converts the data to a (row in a) table
   - the pattern is pretty simple:
     - match a node
     - match all attributes of the current node
       - convert them to rows in a table
-  - transformation into JSON domain would be better
+  - [ ] transformation into JSON domain would be better
+      - this could possible be used for JSON Schema (or perhaps this is its own domain, too?)
+          - if this is its own domain, it would define another transformation into JSON
+            - we would need an output adapter or something so we can convert it to GME nodes
+  - [ ] graph viz would be good
+      - nodes are pretty simple
+      - what if we wanted to add custom actions to the menu?
+        - embed transformations as actions. This would be interesting
 
 - [ ] Get a simple transformation going
   - [ ] create a transformation utility
@@ -46,6 +69,9 @@
               - calling it `MatchedNode`
             - ignore the assignment...
           - check that we get 2 nodes (one for each attribute) with the propert things set
+          - how can we resolve the MatchedNode?
+          - we can remove it and add it later... But this
+          - I am not sure if it makes sense as an input pattern...
 
       - [x] add a test seed
       - [x] what is a natural format to input into the transformation?
@@ -138,13 +164,16 @@
 
 - [ ] split the webgme app into a separate repo
 
-- [ ] add support for pointers?
+- [ ] need to preserve cross-pattern links (for output pattern)
+    - [ ] need to keep the node IDs somewhere
+
+- [ ] update webgme-json to use this for defining the model transformation
+  - add a `plugins` set
+  - this set should contain transformations and member registry values for the plugin engine to use
+  - config info would also be good but how would it be used?
+    - what would be an example of this?
 
 - [ ] add benchmarks (speed up the search by setting order intelligently)
-
-- [ ] update to iterator instead
-    - first, let's just implement `matches` for all matches
-        - we can update it later to an iterator in JS (if supported)
 
 ## Done
 - [x] should we flip the get_valid_targets search part? Should it depend on the type of element?
@@ -294,4 +323,11 @@
 
 - [x] Should we be able to hardcode node path's in a constant?
     - I think this should be OK
+
+- [x] add support for pointers?
+
+- [-] update to iterator instead
+    - first, let's just implement `matches` for all matches
+        - we can update it later to an iterator in JS (if supported)
+    - low priority since we want all matches in our current use cases
 
