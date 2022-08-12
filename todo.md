@@ -40,7 +40,7 @@
     - match a node
     - match all attributes of the current node
       - convert them to rows in a table
-  - [ ] transformation into JSON domain would be better
+  - [-] transformation into JSON domain would be better
       - this could possible be used for JSON Schema (or perhaps this is its own domain, too?)
           - if this is its own domain, it would define another transformation into JSON
             - we would need an output adapter or something so we can convert it to GME nodes
@@ -48,119 +48,25 @@
       - nodes are pretty simple
       - what if we wanted to add custom actions to the menu?
         - embed transformations as actions. This would be interesting
-
-- [ ] Get a simple transformation going
-  - [ ] create a transformation utility
-      - `Transformation.apply(node)`
-      - return WJI??
-      - [x] create a metamodel
-          - what should be instantiable?
-            - Node (set the base)
-            - Attribute
-              - set the type??? Probably not needed
-          - We should prob get rid of "instantiable"
-            - it's a bit artificial since nodes don't need to set "type"
-            - also, it doesn't check "child of"
-            - should we have an "active node" in the output pattern, too?
-            - actually, if we think of `Node` as a short-hand, then it is fine
-      - [ ] add a test
-          - simple table example (2 column table)
-          - [x] add `ExistingNode` to meta...
-              - calling it `MatchedNode`
-            - ignore the assignment...
-          - check that we get 2 nodes (one for each attribute) with the propert things set
-          - how can we resolve the MatchedNode?
-          - we can remove it and add it later... But this
-          - I am not sure if it makes sense as an input pattern...
-
-      - [x] add a test seed
-      - [x] what is a natural format to input into the transformation?
-          - GME nodes for both inputs?
-            - yep, this can be generalized later
-      - [x] finish connecting the JS, rust interop
-          - we have portions working on both sides...
-          - how can we deserialize arbitrary elements? (using only c-style enums?)
-            - we can have a generic type and deserialize those
-            - we seem to be losing the `kind` field...
-              - we just have a `ptr` field.
-          - we can use `from_serde` to serialize using serde
-              - Nodes cannot be serialized/deserialized
-                - the problem is the weak refs
-              - I think we actually need a new type to pass around that can be serialized. Maybe something like a node and node dict?
-                - if we used the WJI format (ish), we could just resolve the id fields...
-                - we could pass:
-                  ```
-                  {
-                    id,
-                    attributes,
-                    pointers: {
-                      <name>: <id>
-                    },
-                    sets,
-                    children: [
-                      <child>,
-                      ...
-                    ],
-                  }
-                  ```
-                - what about any other nodes that aren't in the tree (such as the meta)? How should we pass them?
-                  - optional `context` argument?
-            - what about patterns?
-                - how would we serialize the elements?
-                  - we need some "signaling field" to know the type
-                  - we can store the rest of the data
-                  - we can actually use enums since we aren't using the ABI
-                  - edges:
-                    ```
-                    struct Edge {
-                      src: usize,  // should this be the index of the element in the list? That should actually work since we don't have hierarchy currently
-                      dst: ,
-                      relation: ,
-                    }
-                    ```
-                  - [x] how are petgraph Graph's serialized?
-
-      - [ ] define the output patterns
-          - Nodes should have base pointers set
-            - Convert `Node` to `AnyNode` + `base` ptr
-            - We need a way to set the base target. We could take 2 approaches:
-              - introduce `NodeConstant`
-              - allow starting from partial assignments
-
-              - the second approach is more flexible but it makes the JS code more complicated
-              - the first approach also ensures that we can "crop out" parts of the search space and don't have to worry about pkging up the nodes to be sent
-            - let's add NodeConstant for now. (These features aren't in opposition so we could add both later.)
-
-      - [ ] what is a natural format for output from the transformation?
-        - Output can be WJI but *what IDs should we use*?
-          - @meta:<NodeName>
-          - we could use the WJI to resolve the addresses for existing nodes
-          - we could use @id for new nodes
-  - [x] setup JS interop
-    - [-] make the existing types wasm-supported
-        - hide it behind a feature flag
-        - **wasm_bindgen only supports C-style enums**
-    - [x] how should we actually construct non-trivial GME nodes?
-      - it might be nice to just parse the JS objects but not clear exactly how to interact with them in a meaningful way...
-          - I think we should do this: https://github.com/rustwasm/wasm-bindgen/issues/964
-          - We define GMENode and use serde_json
-    - [x] make a test case
-      - [ ] maybe make the test case that finds two nodes with the same name?
-      - [ ] should I start writing the transformation language?
-        - This would help with the interface...
-        - let's do it. it should probably not be tied to a plugin but rather a general utility
-          - not quite sure how I want to organize the repo
-
-    - [-] should I make it accept (slightly extended) WJI format???
-        - is_active & is_meta need to be added
-        - IDs need to be resolved to actual values (or passed as dict?)
-        - otherwise, that is basically it
-        - should the parsing happen on the rust side? Probably so we don't have to do it a bunch
-        - [-] what type should I use to accept JSValue dictionaries?
-            - JSValue, it seems
-        - [ ] how to resolve the ID fields?
-            - there is a resolving function in the WJI itself...
-        - just make a `GMENode` class and add static factory methods for loading from WJI
+    - [x] define the metamodel
+    - [ ] define the transformation
+      - maybe in a set called "visualizers"?
+        - member attributes:
+          - name
+          - visualizerEngine
+    - [ ] implement the transformation in the visualizer
+        - it would be nice to package this up as a sort of middleware or something
+        ```javascript
+        this._territoryId = this._client.addUI(
+          this,
+          VizTransformAdapter().pipe(events => this._eventCallback(events))
+        );
+        ```
+        - tricky bits:
+          - node identity?
+            - since it is all deterministic, perhaps the `@id:node_x_y` will be enough???
+              - I have my doubts...
+        - [ ] load the transformation
 
 - [ ] split the webgme app into a separate repo
 
@@ -330,4 +236,129 @@
     - first, let's just implement `matches` for all matches
         - we can update it later to an iterator in JS (if supported)
     - low priority since we want all matches in our current use cases
+
+- [x] create plugin that just applies the transformation
+    - config:
+        - transformation to apply (node path?)
+        - parent? (root node for now)
+        - it would be really nice if we could select nodes in the plugin config...
+    - approach:
+      - load the transformation
+      - apply
+      - import nodes
+        - actually, let's just download them
+
+- [x] Get a simple transformation going
+  - [ ] create a transformation utility
+      - `Transformation.apply(node)`
+      - return WJI??
+      - [x] create a metamodel
+          - what should be instantiable?
+            - Node (set the base)
+            - Attribute
+              - set the type??? Probably not needed
+          - We should prob get rid of "instantiable"
+            - it's a bit artificial since nodes don't need to set "type"
+            - also, it doesn't check "child of"
+            - should we have an "active node" in the output pattern, too?
+            - actually, if we think of `Node` as a short-hand, then it is fine
+      - [ ] add a test
+          - simple table example (2 column table)
+          - [x] add `ExistingNode` to meta...
+              - calling it `MatchedNode`
+            - ignore the assignment...
+          - check that we get 2 nodes (one for each attribute) with the propert things set
+          - how can we resolve the MatchedNode?
+          - we can remove it and add it later... But this
+          - I am not sure if it makes sense as an input pattern...
+
+      - [x] add a test seed
+      - [x] what is a natural format to input into the transformation?
+          - GME nodes for both inputs?
+            - yep, this can be generalized later
+      - [x] finish connecting the JS, rust interop
+          - we have portions working on both sides...
+          - how can we deserialize arbitrary elements? (using only c-style enums?)
+            - we can have a generic type and deserialize those
+            - we seem to be losing the `kind` field...
+              - we just have a `ptr` field.
+          - we can use `from_serde` to serialize using serde
+              - Nodes cannot be serialized/deserialized
+                - the problem is the weak refs
+              - I think we actually need a new type to pass around that can be serialized. Maybe something like a node and node dict?
+                - if we used the WJI format (ish), we could just resolve the id fields...
+                - we could pass:
+                  ```
+                  {
+                    id,
+                    attributes,
+                    pointers: {
+                      <name>: <id>
+                    },
+                    sets,
+                    children: [
+                      <child>,
+                      ...
+                    ],
+                  }
+                  ```
+                - what about any other nodes that aren't in the tree (such as the meta)? How should we pass them?
+                  - optional `context` argument?
+            - what about patterns?
+                - how would we serialize the elements?
+                  - we need some "signaling field" to know the type
+                  - we can store the rest of the data
+                  - we can actually use enums since we aren't using the ABI
+                  - edges:
+                    ```
+                    struct Edge {
+                      src: usize,  // should this be the index of the element in the list? That should actually work since we don't have hierarchy currently
+                      dst: ,
+                      relation: ,
+                    }
+                    ```
+                  - [x] how are petgraph Graph's serialized?
+
+      - [ ] define the output patterns
+          - Nodes should have base pointers set
+            - Convert `Node` to `AnyNode` + `base` ptr
+            - We need a way to set the base target. We could take 2 approaches:
+              - introduce `NodeConstant`
+              - allow starting from partial assignments
+
+              - the second approach is more flexible but it makes the JS code more complicated
+              - the first approach also ensures that we can "crop out" parts of the search space and don't have to worry about pkging up the nodes to be sent
+            - let's add NodeConstant for now. (These features aren't in opposition so we could add both later.)
+
+      - [ ] what is a natural format for output from the transformation?
+        - Output can be WJI but *what IDs should we use*?
+          - @meta:<NodeName>
+          - we could use the WJI to resolve the addresses for existing nodes
+          - we could use @id for new nodes
+  - [x] setup JS interop
+    - [-] make the existing types wasm-supported
+        - hide it behind a feature flag
+        - **wasm_bindgen only supports C-style enums**
+    - [x] how should we actually construct non-trivial GME nodes?
+      - it might be nice to just parse the JS objects but not clear exactly how to interact with them in a meaningful way...
+          - I think we should do this: https://github.com/rustwasm/wasm-bindgen/issues/964
+          - We define GMENode and use serde_json
+    - [x] make a test case
+      - [ ] maybe make the test case that finds two nodes with the same name?
+      - [ ] should I start writing the transformation language?
+        - This would help with the interface...
+        - let's do it. it should probably not be tied to a plugin but rather a general utility
+          - not quite sure how I want to organize the repo
+
+    - [-] should I make it accept (slightly extended) WJI format???
+        - is_active & is_meta need to be added
+        - IDs need to be resolved to actual values (or passed as dict?)
+        - otherwise, that is basically it
+        - should the parsing happen on the rust side? Probably so we don't have to do it a bunch
+        - [-] what type should I use to accept JSValue dictionaries?
+            - JSValue, it seems
+        - [ ] how to resolve the ID fields?
+            - there is a resolving function in the WJI itself...
+        - just make a `GMENode` class and add static factory methods for loading from WJI
+
 
