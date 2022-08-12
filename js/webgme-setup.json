@@ -3,17 +3,29 @@
     "seeds": {
       "test": {
         "src": "src/seeds/test"
+      },
+      "transformation": {
+        "src": "src/seeds/transformation"
       }
     },
     "plugins": {
       "ApplyModelTransformation": {
         "src": "src/plugins/ApplyModelTransformation",
         "test": "test/plugins/ApplyModelTransformation"
+      },
+      "ExportLibrary": {
+        "src": "src/plugins/ExportLibrary",
+        "test": "test/plugins/ExportLibrary"
       }
     }
   },
   "dependencies": {
     "seeds": {},
-    "plugins": {}
+    "plugins": {
+      "SetStateFromJSON": {
+        "project": "webgme-json-importer",
+        "path": "node_modules/webgme-json-importer/src/plugins/SetStateFromJSON"
+      }
+    }
   }
 }
