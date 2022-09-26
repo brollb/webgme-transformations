@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "build": "wasm-pack build --target no-modules && npx es-pack build --rustwasm",
+    "build-install": "npm run build && cp pkg-es-pack/gme-pattern-engine.min.js ../../../common/engine/index.js"
+  },
+  "devDependencies": {
+    "@wasm-tool/wasm-pack-plugin": "1.0.1",
+    "es-pack-js": "^0.5.8"
+  }
+}
