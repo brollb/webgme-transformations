@@ -1,4 +1,2 @@
-*This project is still pretty experimental and subject to change!*
-
 # WebGME Transformations
-This repository explores
+This repository contains a simple model transformation for WebGME and logic to apply the given transformation.
