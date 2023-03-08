@@ -4,13 +4,20 @@ define(["./ModelTransformation"], function (Transformation) {
   //  - transformation
   //  - observer
   class TransformationObserver {
-    constructor(client) {
+    constructor(client, callback) {
       this.client = client;
+      this.callback = callback;
       // TODO: get the core, too
     }
 
-    observe(transformation, inputModel) {
+    observe(transformationNode, inputModelNode) {
+      this._onChange
       // TODO: connect the client to the transformation
+    }
+
+    private _onChange(transformationNode, inputModelNode) {
+      const output = transformation.apply(inputModelNode);
+      this.callback(output);
     }
 
     disconnect() {
@@ -18,5 +25,5 @@ define(["./ModelTransformation"], function (Transformation) {
     }
   }
 
-  // TODO:
+  return TransformationObserver;
 });
