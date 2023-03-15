@@ -124,7 +124,7 @@ export default class TransformationObserver {
     });
   }
 
-  private async _getTransformation(client, nodePath: Option<string>): Promise<Transformation> {
+  private async _getTransformation(client, nodePath: string): Promise<Transformation> {
     const {core, rootNode} = await this._getCoreInstance(client);
     const transformationNode = await core.loadByPath(rootNode, nodePath);
     return await Transformation.fromNode(core, transformationNode);
