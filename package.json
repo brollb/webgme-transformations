@@ -1,6 +1,7 @@
 {
   "name": "webgme-transformations",
   "scripts": {
+    "build": "npx tsc",
     "start": "node app.js",
     "test": "node ./node_modules/mocha/bin/mocha --recursive test",
     "apply": "node ./node_modules/webgme-engine/src/bin/apply.js",
@@ -13,13 +14,20 @@
     "users": "node ./node_modules/webgme-engine/src/bin/usermanager.js",
     "clean_up": "node ./node_modules/webgme-engine/src/bin/clean_up.js"
   },
+  "type": "module",
   "version": "1.0.0",
   "peerDependencies": {
     "webgme": "^2.23.0"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^24.0.1",
+    "@rollup/plugin-node-resolve": "^15.0.1",
+    "@rollup/plugin-typescript": "^11.0.0",
     "chai": "^4.3.6",
     "mocha": "^5.2.0",
+    "oxide.ts": "^1.1.0",
+    "rollup": "^3.19.1",
+    "tslib": "^2.5.0",
     "webgme": "^2.23.0"
   },
   "dependencies": {
