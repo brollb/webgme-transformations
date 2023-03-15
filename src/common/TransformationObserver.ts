@@ -67,32 +67,31 @@ export default class TransformationObserver {
 
     this.state = new TransformState();
     this.modelObserver = new NodeObserver(client, async () => {
-      const input = await this._getNode(client, this.inputPath);
+      const input = await this._getNode(client, this.inputPath.unwrap());
       this.state.input = Some(input);
 
-      // TODO: should we check the transformPath instead?
+      let transformation;
       if (this.state.transformation.isSome()) {
+        transformation = this.state.transformation.unwrap();
+      } else if (this.transformPath.isNone()) {  // use the default if no transformation defined
+        const {core} = await this._getCoreInstance(client);
+        transformation = defaultTransformation(core);
       }
-      if (this.state.transformation.isSome()) {
-        const transformData = this.state.transformation.unwrap();
-        const isFactory = typeof transformData === 'function';
-        let transformation;
-        if (isFactory) {
-          const {core} = await this._getCoreInstance(client);
-          transformation = transformData(core);
-        } else {
-          transformation = transformData;
-        }
 
+      if (transformation) {
         this._runTransformation(transformation, this.state.input.unwrap());
       }
     });
     this.transformObserver = new NodeObserver(client, async () => {
-      const transformation = await this._getTransformation(client, this.transformPath);
-      this.state.transformation = Some(transformation);
+      console.log('transform observer callback invoked');
+      if (this.transformPath.isSome()) {
+        const transformPath = this.transformPath.unwrap();
+        const transformation = await this._getTransformation(client, transformPath);
+        this.state.transformation = Some(transformation);
 
-      if (this.state.input.isSome()) {
-        this._runTransformation(transformation, this.state.input.unwrap());
+        if (this.state.input.isSome()) {
+          this._runTransformation(transformation, this.state.input.unwrap());
+        }
       }
     });
   }
@@ -118,14 +117,14 @@ export default class TransformationObserver {
 
   private async _getCoreInstance(client): Promise<{core: GmeClasses.Core, rootNode: GmeClasses.Node}> {
     return new Promise((resolve, reject) => {
-      client.getCoreInstance((err, result) => {
+      client.getCoreInstance({}, (err, result) => {
         if (err) return reject(err);
         resolve(result);
       })
     });
   }
 
-  private async _getTransformation(client, nodePath): Promise<Transformation> {
+  private async _getTransformation(client, nodePath: Option<string>): Promise<Transformation> {
     const {core, rootNode} = await this._getCoreInstance(client);
     const transformationNode = await core.loadByPath(rootNode, nodePath);
     return await Transformation.fromNode(core, transformationNode);
@@ -140,4 +139,15 @@ export default class TransformationObserver {
     const output = await transformation.apply(input);
     this.callback(output);
   }
+}
+
+/*
+ * A transformation observer which derives the transformation following the conventions
+ * used for visualizer transformations (ie, looks up the given member of "visualizers")
+ *
+ * Will this still work if we flip these around so a visualizer engine can be used for
+ * multiple visualizers?
+ */
+class VizTransformObserver {
+  private name: string;
 }

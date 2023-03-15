@@ -1,7 +1,7 @@
 {
   "name": "webgme-transformations",
   "scripts": {
-    "build": "npx tsc",
+    "build": "npx rollup -c rollup.config.mjs",
     "start": "node app.js",
     "test": "node ./node_modules/mocha/bin/mocha --recursive test",
     "apply": "node ./node_modules/webgme-engine/src/bin/apply.js",
