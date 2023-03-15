@@ -60,15 +60,12 @@ impl Relation {
         match (self, src, dst) {
             (Relation::ChildOf, Reference::Node(src_id), Reference::Node(dst_id)) => {
                 let src = gme::find_with_id(top_node, src_id);
-                src.children
-                    .iter()
-                    .find(|child| &child.id == dst_id)
-                    .is_some()
+                src.children.iter().any(|child| &child.id == dst_id)
             }
             (Relation::Has, Reference::Node(id), Reference::Attribute(node_id, name)) => {
                 if id == node_id {
                     let node = gme::find_with_id(top_node, node_id);
-                    node.attributes.keys().find(|n| *n == name).is_some()
+                    node.attributes.keys().any(|n| n == name)
                 } else {
                     false
                 }
