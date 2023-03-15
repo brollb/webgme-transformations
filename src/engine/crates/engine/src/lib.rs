@@ -18,17 +18,17 @@ fn get_valid_targets<'a>(
     top_node: &'a Rc<gme::Node>,
     element_idx: NodeIndex,
 ) -> Box<dyn Iterator<Item = Reference> + 'a> {
-    let element = pattern.graph.node_weight(element_idx.clone()).expect("");
+    let element = pattern.graph.node_weight(element_idx).unwrap();
     match element {
         Element::Node(node) => {
-            // check for a ChildOf relation where this is the target
+            // check for a ChildOf relation where this is the source
             let edges = pattern
                 .graph
-                .edges_directed(element_idx, Direction::Incoming);
+                .edges_directed(element_idx, Direction::Outgoing);
 
             let mut parent_refs = edges.filter_map(|e| match e.weight() {
                 Relation::ChildOf => {
-                    let node_index = e.source();
+                    let node_index = e.target();
                     assignment.matches.get(&node_index)
                 }
                 _ => None,
@@ -186,11 +186,11 @@ type ElementIndex = usize;
 fn select_next_element(
     _pattern: &Pattern,
     _assignment: &Assignment,
-    _remaining_elements: &Vec<NodeIndex>,
+    _remaining_elements: &[NodeIndex],
 ) -> ElementIndex {
     // TODO: Find the element with the most connections to assigned elements
     // TODO: Use total edge count as a tie-breaker
-    // TODO: Prioritize nodes that are the source of a ChildOf relation?
+    // TODO: Prioritize nodes that are the target of a ChildOf relation?
     // TODO: this could be a toposort step before this entire function
     // we should be able to prioritize the sort using the following criteria:
     //   - active node(s)
@@ -219,7 +219,7 @@ fn add_match_to_assignment(
     let mut assignments: Vec<_> = Vec::new();
 
     //  - if no more nodes to assign, return [assignment]
-    if remaining_elements.len() == 0 {
+    if remaining_elements.is_empty() {
         return vec![partial_assignment];
     }
 
@@ -229,7 +229,7 @@ fn add_match_to_assignment(
 
     //    - for each candidate for the pattern element:
     let element_targets: Vec<_> =
-        get_valid_targets(pattern, &partial_assignment, node, element_idx.clone()).collect();
+        get_valid_targets(pattern, &partial_assignment, node, element_idx).collect();
 
     println!(
         "Found {} element_targets for {:?}: {:?}",
@@ -275,7 +275,7 @@ mod tests {
         let mut graph = Graph::new();
         let active_node = graph.add_node(active_node.into());
         let node = graph.add_node(node.into());
-        graph.add_edge(active_node, node, Relation::ChildOf);
+        graph.add_edge(node, active_node, Relation::ChildOf);
 
         let pattern = Pattern::new(graph);
 
@@ -318,18 +318,53 @@ mod tests {
     }
 
     #[test]
+    fn detect_active_node_child2() {
+        let active_node = Node::ActiveNode;
+        let node = Node::AnyNode;
+
+        let mut graph = Graph::new();
+        let node = graph.add_node(node.into());
+        let active_node = graph.add_node(active_node.into());
+        graph.add_edge(node, active_node, Relation::ChildOf);
+
+        let pattern = Pattern::new(graph);
+
+        // Create the GME node
+        let child = gme::Node {
+            id: gme::NodeId::new(String::from("/a/d/child")),
+            base: None,
+            is_active: false,
+            is_meta: false,
+            attributes: HashMap::new(),
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: Vec::new(),
+        };
+        let gme_node = gme::Node {
+            id: gme::NodeId::new(String::from("/a/d")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes: HashMap::new(),
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: vec![Rc::new(child)],
+        };
+
+        let assignments = find_assignments(gme_node, &pattern);
+        assert_eq!(assignments.len(), 1);
+    }
+
+    #[test]
     fn detect_node_by_attr() {
         // Create the pattern
         let mut graph = Graph::new();
         let node = graph.add_node(Node::AnyNode.into());
         let attribute = graph.add_node(Element::Attribute);
 
-        let attr_val = graph.add_node(
-            Element::Constant(Constant::Primitive(Primitive::String(String::from(
-                "TargetValue",
-            ))))
-            .into(),
-        );
+        let attr_val = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
+            String::from("TargetValue"),
+        ))));
         graph.add_edge(node, attribute, Relation::Has);
         graph.add_edge(
             attribute,
@@ -347,7 +382,7 @@ mod tests {
         .into_iter()
         .collect();
         let target = gme::Node {
-            id: target_id.clone(),
+            id: target_id,
             base: None,
             is_active: false,
             is_meta: false,
@@ -435,7 +470,7 @@ mod tests {
             .into_iter()
             .collect();
             Rc::new(gme::Node {
-                id: target_id.clone(),
+                id: target_id,
                 base: None,
                 is_active: false,
                 is_meta: false,
@@ -500,15 +535,14 @@ mod tests {
         let assignments = find_assignments(parent, &pattern);
         assert_eq!(assignments.len(), 2);
         assignments.into_iter().for_each(|assgn| {
-            let gme_refs = assgn.matches.values().into_iter();
+            let gme_refs = assgn.matches.values();
             let mut attr_ref_count = 0;
-            gme_refs.for_each(|gme_ref| match gme_ref {
-                Reference::Attribute(node_id, attr_name) => {
+            gme_refs.for_each(|gme_ref| {
+                if let Reference::Attribute(node_id, attr_name) = gme_ref {
                     attr_ref_count += 1;
                     assert!(node_id.0.contains("target"));
                     assert_eq!(attr_name.0, String::from("name"));
                 }
-                _ => {}
             });
             assert_eq!(attr_ref_count, 2);
         });
@@ -520,10 +554,10 @@ mod tests {
         let mut graph = Graph::new();
         let active_node = graph.add_node(Node::ActiveNode.into());
         let node1 = graph.add_node(Node::AnyNode.into());
-        graph.add_edge(active_node, node1, Relation::ChildOf);
+        graph.add_edge(node1, active_node, Relation::ChildOf);
 
         let node2 = graph.add_node(Node::AnyNode.into());
-        graph.add_edge(node1, node2, Relation::ChildOf);
+        graph.add_edge(node2, node1, Relation::ChildOf);
 
         let pattern = Pattern::new(graph);
 
@@ -583,11 +617,11 @@ mod tests {
     fn detect_attribute() {
         // Create the pattern
         let mut graph = Graph::new();
-        let attr = graph.add_node(Element::Attribute.into());
+        let attr = graph.add_node(Element::Attribute);
 
-        let attr_name = graph.add_node(
-            Element::Constant(Constant::Primitive(Primitive::String(String::from("name")))).into(),
-        );
+        let attr_name = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
+            String::from("name"),
+        ))));
 
         graph.add_edge(
             attr,
@@ -636,10 +670,10 @@ mod tests {
     fn detect_multiple_attributes() {
         // Create the pattern
         let mut graph = Graph::new();
-        let attr = graph.add_node(Element::Attribute.into());
-        let attr_name = graph.add_node(
-            Element::Constant(Constant::Primitive(Primitive::String(String::from("name")))).into(),
-        );
+        let attr = graph.add_node(Element::Attribute);
+        let attr_name = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
+            String::from("name"),
+        ))));
 
         graph.add_edge(
             attr,
@@ -697,10 +731,10 @@ mod tests {
     #[test]
     fn detect_pointer_target() {
         let mut graph = Graph::new();
-        let ptr = graph.add_node(Element::Pointer.into());
-        let ptr_name = graph.add_node(
-            Element::Constant(Constant::Primitive(Primitive::String(String::from("src")))).into(),
-        );
+        let ptr = graph.add_node(Element::Pointer);
+        let ptr_name = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
+            String::from("src"),
+        ))));
 
         graph.add_edge(
             ptr,
@@ -709,14 +743,11 @@ mod tests {
         );
 
         // Target should be a node with an attribute set to "target"
-        let target = graph.add_node(Element::Node(Node::AnyNode).into());
-        let target_attr = graph.add_node(Element::Attribute.into());
-        let target_val = graph.add_node(
-            Element::Constant(Constant::Primitive(Primitive::String(String::from(
-                "target",
-            ))))
-            .into(),
-        );
+        let target = graph.add_node(Element::Node(Node::AnyNode));
+        let target_attr = graph.add_node(Element::Attribute);
+        let target_val = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
+            String::from("target"),
+        ))));
 
         graph.add_edge(target, target_attr, Relation::Has);
         graph.add_edge(
@@ -794,10 +825,10 @@ mod tests {
     #[test]
     fn detect_pointer_const_target() {
         let mut graph = Graph::new();
-        let ptr = graph.add_node(Element::Pointer.into());
-        let ptr_name = graph.add_node(
-            Element::Constant(Constant::Primitive(Primitive::String(String::from("src")))).into(),
-        );
+        let ptr = graph.add_node(Element::Pointer);
+        let ptr_name = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
+            String::from("src"),
+        ))));
 
         graph.add_edge(
             ptr,
@@ -807,8 +838,9 @@ mod tests {
 
         // Target should be a node with an attribute set to "target"
         let target_path = String::from("/a/d/ptr_tgt");
-        let target_index =
-            graph.add_node(Element::Constant(Constant::Node(NodeId(target_path.clone()))).into());
+        let target_index = graph.add_node(Element::Constant(Constant::Node(NodeId(
+            target_path.clone(),
+        ))));
         graph.add_edge(
             ptr,
             target_index,
@@ -881,10 +913,10 @@ mod tests {
     #[ignore]
     fn detect_pointer_exists() {
         let mut graph = Graph::new();
-        let ptr = graph.add_node(Element::Pointer.into());
-        let ptr_name = graph.add_node(
-            Element::Constant(Constant::Primitive(Primitive::String(String::from("src")))).into(),
-        );
+        let ptr = graph.add_node(Element::Pointer);
+        let ptr_name = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
+            String::from("src"),
+        ))));
 
         graph.add_edge(
             ptr,

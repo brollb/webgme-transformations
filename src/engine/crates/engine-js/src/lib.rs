@@ -1,7 +1,7 @@
 mod utils;
 
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 use wasm_bindgen::prelude::*;
 use webgme_pattern_engine::{find_assignments, gme, pattern, Primitive};
 
@@ -77,7 +77,11 @@ impl From<GMENode> for gme::Node {
             attributes,
             pointers: HashMap::new(), // TODO
             sets: HashMap::new(),     // TODO
-            children: Vec::new(),     // TODO
+            children: node
+                .children
+                .into_iter()
+                .map(|child| Rc::new(child.into()))
+                .collect::<Vec<Rc<gme::Node>>>(),
         }
     }
 }
@@ -90,7 +94,8 @@ pub fn find_matches(node: &JsValue, pattern: &JsValue, referenced_nodes: &JsValu
     let pattern = pattern.into_serde::<pattern::Pattern>();
     log(&format!("pattern deserialization result {:?}", &pattern));
     let pattern = pattern.unwrap();
-    log(&format!("node {:?}; pattern {:?}", &node, &pattern));
-    let assignments = find_assignments(node.into(), &pattern);
+    let gme_node: gme::Node = node.into();
+    log(&format!("node\n{:?};\npattern\n{:?}", &gme_node, &pattern));
+    let assignments = find_assignments(gme_node, &pattern);
     JsValue::from_serde(&assignments).unwrap()
 }
