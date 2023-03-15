@@ -18,17 +18,17 @@ fn get_valid_targets<'a>(
     top_node: &'a Rc<gme::Node>,
     element_idx: NodeIndex,
 ) -> Box<dyn Iterator<Item = Reference> + 'a> {
-    let element = pattern.graph.node_weight(element_idx.clone()).expect("");
+    let element = pattern.graph.node_weight(element_idx).unwrap();
     match element {
         Element::Node(node) => {
-            // check for a ChildOf relation where this is the target
+            // check for a ChildOf relation where this is the source
             let edges = pattern
                 .graph
-                .edges_directed(element_idx, Direction::Incoming);
+                .edges_directed(element_idx, Direction::Outgoing);
 
             let mut parent_refs = edges.filter_map(|e| match e.weight() {
                 Relation::ChildOf => {
-                    let node_index = e.source();
+                    let node_index = e.target();
                     assignment.matches.get(&node_index)
                 }
                 _ => None,
@@ -186,11 +186,11 @@ type ElementIndex = usize;
 fn select_next_element(
     _pattern: &Pattern,
     _assignment: &Assignment,
-    _remaining_elements: &Vec<NodeIndex>,
+    _remaining_elements: &[NodeIndex],
 ) -> ElementIndex {
     // TODO: Find the element with the most connections to assigned elements
     // TODO: Use total edge count as a tie-breaker
-    // TODO: Prioritize nodes that are the source of a ChildOf relation?
+    // TODO: Prioritize nodes that are the target of a ChildOf relation?
     // TODO: this could be a toposort step before this entire function
     // we should be able to prioritize the sort using the following criteria:
     //   - active node(s)
@@ -275,7 +275,7 @@ mod tests {
         let mut graph = Graph::new();
         let active_node = graph.add_node(active_node.into());
         let node = graph.add_node(node.into());
-        graph.add_edge(active_node, node, Relation::ChildOf);
+        graph.add_edge(node, active_node, Relation::ChildOf);
 
         let pattern = Pattern::new(graph);
 
@@ -315,6 +315,44 @@ mod tests {
             Reference::Node(id) => assert_eq!(top_node_id, *id),
             _ => panic!("Did not match active node to a node!"),
         }
+    }
+
+    #[test]
+    fn detect_active_node_child2() {
+        let active_node = Node::ActiveNode;
+        let node = Node::AnyNode;
+
+        let mut graph = Graph::new();
+        let node = graph.add_node(node.into());
+        let active_node = graph.add_node(active_node.into());
+        graph.add_edge(node, active_node, Relation::ChildOf);
+
+        let pattern = Pattern::new(graph);
+
+        // Create the GME node
+        let child = gme::Node {
+            id: gme::NodeId::new(String::from("/a/d/child")),
+            base: None,
+            is_active: false,
+            is_meta: false,
+            attributes: HashMap::new(),
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: Vec::new(),
+        };
+        let gme_node = gme::Node {
+            id: gme::NodeId::new(String::from("/a/d")),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes: HashMap::new(),
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: vec![Rc::new(child)],
+        };
+
+        let assignments = find_assignments(gme_node, &pattern);
+        assert_eq!(assignments.len(), 1);
     }
 
     #[test]
@@ -520,10 +558,10 @@ mod tests {
         let mut graph = Graph::new();
         let active_node = graph.add_node(Node::ActiveNode.into());
         let node1 = graph.add_node(Node::AnyNode.into());
-        graph.add_edge(active_node, node1, Relation::ChildOf);
+        graph.add_edge(node1, active_node, Relation::ChildOf);
 
         let node2 = graph.add_node(Node::AnyNode.into());
-        graph.add_edge(node1, node2, Relation::ChildOf);
+        graph.add_edge(node2, node1, Relation::ChildOf);
 
         let pattern = Pattern::new(graph);
 

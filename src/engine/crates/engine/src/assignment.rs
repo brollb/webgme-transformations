@@ -75,10 +75,10 @@ impl<'a> Assignment {
             let is_valid = match relation {
                 Relation::ChildOf => self
                     .matches
-                    .get(&index)
+                    .get(index)
                     .map(|other_ref| match dir {
-                        Direction::Incoming => (other_ref, gme_ref),
-                        Direction::Outgoing => (gme_ref, other_ref),
+                        Direction::Outgoing => (other_ref, gme_ref),
+                        Direction::Incoming => (gme_ref, other_ref),
                     })
                     .map(|(src_ref, dst_ref)| {
                         let src = match src_ref {
