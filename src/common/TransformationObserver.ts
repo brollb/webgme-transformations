@@ -35,10 +35,9 @@ export class NodeObserver {
   }
 }
 
-type TransformationFactory = (core: GmeClasses.Core) => Transformation;
 class TransformState {
   // transformation or transformation factory
-  transformation: Option<Transformation | TransformationFactory>;
+  transformation: Option<Transformation>;
   input: Option<GmeClasses.Node>;
 
   constructor() {
