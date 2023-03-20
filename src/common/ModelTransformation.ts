@@ -107,7 +107,7 @@ class TransformationStep {
     this.outputPattern = outputPattern;
   }
 
-  async apply(node, gmeNode, createdNodes = {}) {
+  async apply(node: GMENode, gmeNode: Core.Node, createdNodes = {}) {
     console.log("---> applying step", this.name);
     const matches = await this.pattern.matches(node);
     const outputs = await Promise.all(matches.map(
@@ -126,10 +126,10 @@ class TransformationStep {
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
     const children = await core.loadChildren(node);
     const inputNode = children.find((child) =>
-      core.getAttribute(child, "name").includes("Input")
+      core.getAttribute(child, "name").toString().includes("Input")
     );
     const outputNode = children.find((child) =>
-      core.getAttribute(child, "name").includes("Output")
+      core.getAttribute(child, "name").toString().includes("Output")
     );
     const [inputPattern, outputPattern] = await Promise.all([
       Pattern.fromNode(core, inputNode),
@@ -137,7 +137,7 @@ class TransformationStep {
     ]);
 
     console.log("input node path:", core.getPath(inputNode));
-    const name = core.getAttribute(node, "name");
+    const name = core.getAttribute(node, "name").toString();
     return new TransformationStep(name, core, inputPattern, outputPattern);
   }
 }
@@ -340,10 +340,10 @@ export class Pattern {
     if (isNodePath) {
       const node = await core.loadByPath(rootNode, indexOrNodePath);
       const elementNode = Pattern.getPatternChild(core, node);
-      const elementType: string = core.getAttribute(
+      const elementType = core.getAttribute(
         core.getBaseType(elementNode),
         "name",
-      );
+      ).toString();
       const elementPath = core.getPath(elementNode);
       if (elementType === "Constant") {
         return core.getAttribute(elementNode, "value");
@@ -486,10 +486,10 @@ export class Pattern {
     return pattern;
   }
 
-  static getPatternChild(core, node) {
+  static getPatternChild(core: GmeClasses.Core, node: Core.Node): Core.Node {
     let child = node;
-    const isPatternType = (n) => {
-      const metaType = core.getAttribute(core.getBaseType(n), "name");
+    const isPatternType = (n: Core.Node) => {
+      const metaType = core.getAttribute(core.getBaseType(n), "name").toString();
       return metaType.includes("Pattern") || metaType.includes("Structure");
     };
     while (child && !isPatternType(core.getParent(child))) {
@@ -498,7 +498,7 @@ export class Pattern {
     return child;
   }
 
-  static getElementForNode(core, node, metaType) {
+  static getElementForNode(core: GmeClasses.Core, node: Core.Node, metaType: string) {
     const type = Pattern.getElementTypeForNode(core, node, metaType);
     const nodePath = core.getPath(node);
     const originPath = core.getPointerPath(node, "origin");
@@ -506,7 +506,7 @@ export class Pattern {
     return new Element(type, nodePath, originPath);
   }
 
-  static getElementTypeForNode(core, node, metaType) {
+  static getElementTypeForNode(core: GmeClasses.Core, node: Core.Node, metaType: string) {
     switch (metaType) {
       case "ActiveNode":
         return new ActiveNode();
