@@ -54,7 +54,7 @@ export default class Transformation {
   // TODO: create the output pattern using the assignment values
   // TODO: sort the elements -> (parent) nodes -> attributes/pointers/etc
 
-  static async fromNode(core, node) {
+  static async fromNode(core: GmeClasses.Core, node: Core.Node) {
     const stepNodes = sortNodeList(core, await core.loadChildren(node), "next");
     console.log(
       "steps:",
@@ -67,7 +67,7 @@ export default class Transformation {
   }
 }
 
-function sortNodeList(core, nodes, ptr) {
+function sortNodeList(core: GmeClasses.Core, nodes: Core.Node[], ptr: string) {
   const nodeDict = Object.fromEntries(
     nodes.map((n) => [core.getPath(n), n]),
   );
@@ -99,7 +99,7 @@ class TransformationStep {
   private pattern: Pattern;
   private outputPattern: Pattern;
 
-  constructor(name, core, pattern, outputPattern) {
+  constructor(name: string, core: GmeClasses.Core, pattern: Pattern, outputPattern: Pattern) {
     this.name = name;
     this.core = core;
     this.pattern = pattern;
@@ -123,7 +123,7 @@ class TransformationStep {
     return outputs;
   }
 
-  static async fromNode(core, node) {
+  static async fromNode(core: GmeClasses.Core, node: Core.Node) {
     const children = await core.loadChildren(node);
     const inputNode = children.find((child) =>
       core.getAttribute(child, "name").includes("Input")
@@ -173,7 +173,7 @@ export class Pattern {
       !matchedNode,
       new Error(
         "Matched nodes cannot be in input patterns: " +
-          JSON.stringify(matchedNode),
+        JSON.stringify(matchedNode),
       ),
     );
   }
@@ -193,7 +193,8 @@ export class Pattern {
     return this.graph.nodes.slice();
   }
 
-  addRelation(srcIndex, dstIndex, relation) {
+  addRelation(srcIndex: number, dstIndex: number, relation: Relation.Relation) {
+    console.log('add relation', relation, 'btwn', srcIndex, dstIndex);
     return this.graph.addEdge(srcIndex, dstIndex, relation);
   }
 
@@ -218,17 +219,18 @@ export class Pattern {
     return this.graph.edges.concat(this.externalRelations);
   }
 
-  async instantiate(core, node, assignments, createdNodes, idPrefix = "node") {
+  async instantiate(core: GmeClasses.Core, node, assignments, createdNodes, idPrefix = "node") {
     const elements: [Element, number][] = this.getElements().map((element, i) => [element, i]);
+    console.log({ elements });
     const [nodeElements, otherElements] = partition(
       elements,
-      ([e, i]) => e.type.isNode()
+      ([e]) => e.type.isNode()
     );
-    const nodeIdFor = (index) => `@id:${idPrefix}_${index}`;
+    const nodeIdFor = (index: string) => `@id:${idPrefix}_${index}`;
 
     const [matchedNodeElements, otherNodeElements] = partition(
       nodeElements,
-      ([element]) => element.type?.Node?.MatchedNode,
+      ([element]) => element.type instanceof MatchedNode,
     );
     const matchedNodes = matchedNodeElements
       .map(([element, index]) => {
@@ -236,7 +238,7 @@ export class Pattern {
         //   - find the input element being referenced
         //   - resolve it to the match from the assignments
         //   - look up the createdNode corresponding to that match
-        const inputElementPath = element.type?.Node?.MatchedNode;
+        const inputElementPath = element.type.matchPath;
         const modelElement = assignments[inputElementPath];
         const nodePath = modelElement.Node;
         assert(
@@ -262,36 +264,37 @@ export class Pattern {
     });
 
     const nodes = newNodes.concat(matchedNodes);
-    const getNodeAt = (index) => {
-      const nodePair = nodes.find(([n, i]) => i === index);
+    const getNodeAt = (index: number) => {
+      const nodePair = nodes.find(([_n, i]) => i === index);
       assert(nodePair);
       return nodePair[0];
     };
 
     console.log({ nodes });
-    const updateElements = otherElements.filter(([e, i]) => !e.type.Constant);
+    const updateElements = otherElements.filter(([e]) => !e.type.isConstant());
     await updateElements.reduce(async (prev, [element, index]) => {
       await prev;
       const [outEdges, inEdges] = this.getRelationsWith(index);
-      if (element.type === "Attribute" || element.type === "Pointer") {
+      if (element.type instanceof Attribute || element.type instanceof Pointer) {
         const [[hasEdge], otherEdges] = partition(
           inEdges,
-          ([src, dst, relation]) => relation === "Has",
+          ([_src, _dst, relation]) => relation instanceof Relation.Has,
         );
         assert(
           hasEdge,
           new UninstantiableError(
-            `${element.type} missing source node ("Has" relation)`,
+            `${JSON.stringify(element.type)} missing source node ("Has" relation)`,
           ),
         );
 
         // FIXME: why might this not find a node?
+        console.log({ hasEdge });
         const nodeWJI = getNodeAt(hasEdge[0]);
         const [nameTuple, valueTuple] = getNameValueTupleFor(
           index,
           otherEdges.concat(outEdges),
         );
-        console.log({nameTuple})
+        console.log({ nameTuple })
         const rootNode = core.getRoot(node);
         const name = await this.resolveNodeProperty(
           core,
@@ -305,7 +308,7 @@ export class Pattern {
           assignments,
           ...valueTuple,
         );
-        const field = element.type === "Attribute" ? "attributes" : "pointers";
+        const field = element.type instanceof Attribute ? "attributes" : "pointers";
         nodeWJI[field][name] = targetPath;
       } else {
         throw new Error(
@@ -315,9 +318,9 @@ export class Pattern {
     }, Promise.resolve());
 
     // add child of relations
-    const childRelations = this.getAllRelations()
-      .filter(([src, dst, relation]) => relation === "ChildOf")
-      .map(([src, dst]) => {
+    this.getAllRelations()
+      .filter(([_src, _dst, relation]) => relation instanceof Relation.ChildOf)
+      .forEach(([src, dst]) => {
         const dstNode = getNodeAt(dst);
         const srcNode = getNodeAt(src);
         srcNode.parent = dstNode;
@@ -327,8 +330,8 @@ export class Pattern {
   }
 
   async resolveNodeProperty(
-    core,
-    rootNode,
+    core: GmeClasses.Core,
+    rootNode: Core.Node,
     assignments,
     indexOrNodePath,
     property,
@@ -337,8 +340,8 @@ export class Pattern {
     if (isNodePath) {
       const node = await core.loadByPath(rootNode, indexOrNodePath);
       const elementNode = Pattern.getPatternChild(core, node);
-      const elementType = core.getAttribute(
-        core.getMetaType(elementNode),
+      const elementType: string = core.getAttribute(
+        core.getBaseType(elementNode),
         "name",
       );
       const elementPath = core.getPath(elementNode);
@@ -400,6 +403,7 @@ export class Pattern {
 
     const pattern = new Pattern();
 
+    const elementsByNodePath = {};  // mapping from node path to element
     await elementNodes.reduce(async (prev, node) => {
       await prev;
       const nodePath = core.getPath(node);
@@ -435,34 +439,36 @@ export class Pattern {
             baseIndex,
             new Relation.With(Property.Value, Property.Value),
           );
+          elementsByNodePath[nodePath] = nodeElement;
         } else {
           const element = Pattern.getElementForNode(core, node, metaType);
           const nodePath: GmeCommon.Path = core.getPath(node);
           pattern.addElement(element, Some(nodePath));
+          elementsByNodePath[nodePath] = element;
         }
       } else {
         const srcPath = core.getPointerPath(node, "src");
-        const srcIndex = elementNodes.findIndex((n) =>
-          core.getPath(n) === srcPath
-        );
         const dstPath = core.getPointerPath(node, "dst");
-        const dstIndex = elementNodes.findIndex((n) =>
-          core.getPath(n) === dstPath
-        );
 
         // FIXME: this currently assumes a 1:1 mapping btwn nodes and elements
+        // Actually lookup the element
+
         const elements = pattern.getElements();
+        const srcElementIndex = elements.findIndex(element => srcPath.startsWith(element.nodePath));
+        const dstElementIndex = elements.findIndex(element => dstPath.startsWith(element.nodePath));
+        const srcElement = elements[srcElementIndex];
+        const dstElement = elements[dstElementIndex];
         const src = await Endpoint.from(
           core,
           patternNode,
           srcPath,
-          elements[srcIndex],
+          srcElement,
         );
         const dst = await Endpoint.from(
           core,
           patternNode,
           dstPath,
-          elements[dstIndex],
+          dstElement,
         );
         const relation = Pattern.getRelationElementForNode(
           core,
@@ -470,22 +476,12 @@ export class Pattern {
           src,
           dst,
         );
-        // get the index for the element itself (ie, not the port ID)
-        const srcElement = Pattern.getPatternChild(core, src.node);
-        const srcElementIndex = elementNodes.findIndex((node) =>
-          node === srcElement
-        );
-        const dstElement = Pattern.getPatternChild(core, dst.node);
-        const dstElementIndex = elementNodes.findIndex((node) =>
-          node === dstElement
-        );
 
         if (srcElementIndex !== -1 && dstElementIndex !== -1) {
           pattern.addRelation(srcElementIndex, dstElementIndex, relation);
         } else {
           const src = srcElementIndex === -1 ? srcPath : srcElementIndex;
           const dst = dstElementIndex === -1 ? dstPath : dstElementIndex;
-          const patternPath = core.getPath(patternNode);
           pattern.addCrossPatternRelation(src, dst, relation);
         }
       }
@@ -497,7 +493,7 @@ export class Pattern {
   static getPatternChild(core, node) {
     let child = node;
     const isPatternType = (n) => {
-      const metaType = core.getAttribute(core.getMetaType(n), "name");
+      const metaType = core.getAttribute(core.getBaseType(n), "name");
       return metaType.includes("Pattern") || metaType.includes("Structure");
     };
     while (child && !isPatternType(core.getParent(child))) {
@@ -540,7 +536,7 @@ export class Pattern {
   }
 
   static getRelationElementForNode(core, node, source, target) {
-    const metaType = core.getAttribute(core.getMetaType(node), "name");
+    const metaType = core.getAttribute(core.getBaseType(node), "name");
     switch (metaType) {
       case "has":
         return new Relation.Has();
@@ -607,11 +603,12 @@ class Graph {
 
 interface ElementType extends EngineSerializable {
   isNode(): boolean;
-  
+  isConstant(): boolean;
 }
 
 class ActiveNode implements ElementType {
-  isNode(): boolean {return true;}
+  isNode(): boolean { return true; }
+  isConstant(): boolean { return false; }
 
   toEngineJSON() {
     return {
@@ -621,7 +618,8 @@ class ActiveNode implements ElementType {
 }
 
 class AnyNode implements ElementType {
-  isNode(): boolean {return true;}
+  isNode(): boolean { return true; }
+  isConstant(): boolean { return false; }
   toEngineJSON() {
     return ({
       Node: "AnyNode",
@@ -630,11 +628,12 @@ class AnyNode implements ElementType {
 }
 
 class MatchedNode implements ElementType {
-  private matchPath: string;
+  matchPath: string;
   constructor(matchPath: string) {
     this.matchPath = matchPath;
   }
-  isNode(): boolean {return true;}
+  isNode(): boolean { return true; }
+  isConstant(): boolean { return false; }
   toEngineJSON() {
     return ({
       Node: { MatchedNode: this.matchPath },
@@ -643,14 +642,16 @@ class MatchedNode implements ElementType {
 }
 
 class Attribute implements ElementType {
-  isNode(): boolean {return false;}
+  isNode(): boolean { return false; }
+  isConstant(): boolean { return false; }
   toEngineJSON() {
     return "Attribute";
   }
 }
 
 class Pointer implements ElementType {
-  isNode(): boolean {return false;}
+  isNode(): boolean { return false; }
+  isConstant(): boolean { return false; }
   toEngineJSON() {
     return "Pointer";
   }
@@ -662,7 +663,8 @@ class Constant implements ElementType {
     this.value = value;
   }
 
-  isNode(): boolean {return false;}
+  isConstant(): boolean { return true; }
+  isNode(): boolean { return false; }
   toEngineJSON() {
     return ({
       Constant: {
@@ -678,7 +680,8 @@ class NodeConstant implements ElementType {
   constructor(path: string) {
     this.path = path;
   }
-  isNode(): boolean {return true;}
+  isNode(): boolean { return true; }
+  isConstant(): boolean { return true; }
   toEngineJSON() {
     return ({
       Constant: {
@@ -701,11 +704,11 @@ class Element {
 }
 
 interface EngineSerializable {
-  toEngineJSON();
+  toEngineJSON(): any;
 }
 
 namespace Relation {
-  export interface Relation extends EngineSerializable {}
+  export interface Relation extends EngineSerializable { }
 
   export class Has implements Relation {
     toEngineJSON() {
@@ -720,17 +723,17 @@ namespace Relation {
   }
 
   export class With implements Relation {
-    srcProperty: Property;
-    dstProperty: Property;
+    src: Property;
+    dst: Property;
 
     constructor(srcProperty: Property, dstProperty: Property) {
-      this.srcProperty = srcProperty;
-      this.dstProperty = dstProperty;
+      this.src = srcProperty;
+      this.dst = dstProperty;
     }
 
     toEngineJSON() {
       return {
-        With: [this.srcProperty, this.dstProperty],
+        With: [this.src, this.dst],
       };
     }
   }
@@ -742,7 +745,7 @@ enum Property {
 }
 
 namespace Primitive {
-  export interface Primitive {}
+  export interface Primitive { }
 
   class String implements Primitive {
     String: string; // non-standard casing to make JSON rep engine-compatible
@@ -855,37 +858,59 @@ function partition<T>(list: T[], fn: (item: T) => boolean) {
   return result;
 }
 
-function assert(cond, error = new Error("Assert failed")) {
+function assert(cond: boolean, error = new Error("Assert failed")) {
   if (!cond) {
     throw error;
   }
 }
 
-function getNameValueTupleFor(index, edges) {
-  const tuples = new Array(2);
-  edges.filter(([, , relation]) => relation.With)
-    .forEach((edge) => {
-      const relation = edge[2];
-      const endpointIndex = edge.indexOf(index);
-      const otherEndpoint = endpointIndex === 0 ? 1 : 0;
-      const nameOrValue = relation.With[endpointIndex];
-      if (nameOrValue === Property.Name) {
-        tuples[0] = [edge[otherEndpoint], relation.With[otherEndpoint]];
-      } else {
-        tuples[1] = [edge[otherEndpoint], relation.With[otherEndpoint]];
-      }
-    });
+// The following function returns the name and value for the given attribute
+// (or pointer) in the input pattern.
+//
+// For example, suppose an Attribute node, A1, is connected to two other attributes: A2, A3.
+// We might connect the name port of A1 to the value port of A2 and the value port of A1 to
+// the name port of A3. Passing A1 to this function would return:
+//
+//  [A2 (index), Property.Value]  // this one is first since it is connected to "name" of A1
+//  [A3 (index), Property.Name]
+//
+function getNameValueTupleFor(attrIndex: number, edges) {
+  let name: [number, Property];
+  let value: [number, Property];
 
-  return tuples;
+  const withEdges: [number, number, Relation.With][] = edges
+    .filter(([, , relation]) => relation instanceof Relation.With);
+
+  for (const edge of withEdges) {
+    const [srcIndex, dstIndex, relation] = edge;
+    const endpoints: [[number, Property], [number, Property]] = [
+      [srcIndex, relation.src],
+      [dstIndex, relation.dst],
+    ];
+
+    const [endpoint, otherEndpoint] = endpoints
+      .sort(([index]) => index === attrIndex ? -1 : 1);
+
+    if (endpoint[1] === Property.Name) {
+      name = otherEndpoint;
+    } else {
+      value = otherEndpoint;
+    }
+
+    if (name && value) {
+      return [name, value];
+    }
+  }
+  return [name, value];
 }
 
-function mapKeys(obj, fn) {
+function mapKeys<T>(obj: { [key: string]: T }, fn: (k: string) => string) {
   return Object.fromEntries(
     Object.entries(obj).map(([k, v]) => [fn(k), v]),
   );
 }
 
-class UninstantiableError extends Error {}
+class UninstantiableError extends Error { }
 class NoMatchedNodeError extends Error {
   nodePath: string;
 
@@ -914,5 +939,8 @@ class JsonNode {
 
   constructor(id: string) {
     this.id = id;
+    this.attributes = {};
+    this.pointers = {};
+    this.children = [];
   }
 }
