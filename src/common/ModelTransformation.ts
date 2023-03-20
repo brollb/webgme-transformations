@@ -449,10 +449,6 @@ export class Pattern {
       } else {
         const srcPath = core.getPointerPath(node, "src");
         const dstPath = core.getPointerPath(node, "dst");
-
-        // FIXME: this currently assumes a 1:1 mapping btwn nodes and elements
-        // Actually lookup the element
-
         const elements = pattern.getElements();
         const srcElementIndex = elements.findIndex(element => srcPath.startsWith(element.nodePath));
         const dstElementIndex = elements.findIndex(element => dstPath.startsWith(element.nodePath));
