@@ -1,44 +1,49 @@
-import type {Client} from './types';
 import Transformation from "./ModelTransformation";
-import {Option, None, Some} from 'oxide.ts';
+import { None, Option, Some } from "oxide.ts";
 
 export class NodeObserver {
-  private client: Client;
+  private client: Gme.Client;
   private territoryId: Option<string>;
   private callback;
 
-  constructor(client, callback) {
+  constructor(client: Gme.Client, callback) {
     this.client = client;
     this.callback = callback;
     this.territoryId = None;
   }
-  
+
   observe(nodePath: string, depth: number): void {
     // use the client to subscribe to changes in each (territories)
     this.disconnect();
 
-    this.territoryId = this.client.addUI(
+    const territoryId = this.client.addUI(
       this,
-      this.callback
+      this.callback,
     );
     const territory = {};
     territory[nodePath] = { children: depth };
-    console.log('updateTerritory for', nodePath, ':', this.territoryId, territory);
-    this.client.updateTerritory(this.territoryId, territory);
+    console.log(
+      "updateTerritory for",
+      nodePath,
+      ":",
+      territoryId,
+      territory,
+    );
+    this.client.updateTerritory(territoryId, territory);
+
+    this.territoryId = Some(territoryId);
   }
 
   disconnect(): void {
-    if (this.territoryId) {
-      this.client.removeUI(this.territoryId);
-      this.territoryId = null;
-    }
+    this.territoryId.map((id) => this.client.removeUI(id));
+    this.territoryId = None;
   }
 }
 
 class TransformState {
   // transformation or transformation factory
   transformation: Option<Transformation>;
-  input: Option<GmeClasses.Node>;
+  input: Option<Core.Node>;
 
   constructor() {
     this.reset();
@@ -50,6 +55,8 @@ class TransformState {
   }
 }
 
+// FIXME: this tracks two different nodes but the transformation is really derived from
+// the other
 export default class TransformationObserver {
   private modelObserver: NodeObserver;
   private transformObserver: NodeObserver;
@@ -72,8 +79,8 @@ export default class TransformationObserver {
       let transformation;
       if (this.state.transformation.isSome()) {
         transformation = this.state.transformation.unwrap();
-      } else if (this.transformPath.isNone()) {  // use the default if no transformation defined
-        const {core} = await this._getCoreInstance(client);
+      } else if (this.transformPath.isNone()) { // use the default if no transformation defined
+        const { core } = await this._getCoreInstance(client);
         transformation = defaultTransformation(core);
       }
 
@@ -82,10 +89,13 @@ export default class TransformationObserver {
       }
     });
     this.transformObserver = new NodeObserver(client, async () => {
-      console.log('transform observer callback invoked');
+      console.log("transform observer callback invoked");
       if (this.transformPath.isSome()) {
         const transformPath = this.transformPath.unwrap();
-        const transformation = await this._getTransformation(client, transformPath);
+        const transformation = await this._getTransformation(
+          client,
+          transformPath,
+        );
         this.state.transformation = Some(transformation);
 
         if (this.state.input.isSome()) {
@@ -99,6 +109,8 @@ export default class TransformationObserver {
     // use the client to subscribe to changes in each (territories)
     this.inputPath = Option.from(inputPath);
     this.transformPath = Option.from(transformPath);
+    console.log(this.inputPath);
+    console.log(this.transformPath);
 
     this.modelObserver.observe(inputPath, Infinity);
 
@@ -114,23 +126,28 @@ export default class TransformationObserver {
     this.transformObserver.disconnect();
   }
 
-  private async _getCoreInstance(client): Promise<{core: GmeClasses.Core, rootNode: GmeClasses.Node}> {
+  private async _getCoreInstance(
+    client,
+  ): Promise<{ core: GmeClasses.Core; rootNode: Core.Node }> {
     return new Promise((resolve, reject) => {
       client.getCoreInstance({}, (err, result) => {
         if (err) return reject(err);
         resolve(result);
-      })
+      });
     });
   }
 
-  private async _getTransformation(client, nodePath: string): Promise<Transformation> {
-    const {core, rootNode} = await this._getCoreInstance(client);
+  private async _getTransformation(
+    client,
+    nodePath: string,
+  ): Promise<Transformation> {
+    const { core, rootNode } = await this._getCoreInstance(client);
     const transformationNode = await core.loadByPath(rootNode, nodePath);
     return await Transformation.fromNode(core, transformationNode);
   }
 
-  private async _getNode(client, nodePath): GmeClasses.Node {
-    const {core, rootNode} = await this._getCoreInstance(client);
+  private async _getNode(client, nodePath): Promise<Core.Node> {
+    const { core, rootNode } = await this._getCoreInstance(client);
     return await core.loadByPath(rootNode, nodePath);
   }
 

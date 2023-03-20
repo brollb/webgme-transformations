@@ -1,2 +1,2 @@
-export {default as ModelTransformation} from './ModelTransformation';
-export {default as TransformationObserver} from './TransformationObserver';
+export { default as ModelTransformation } from "./ModelTransformation";
+export { default as TransformationObserver } from "./TransformationObserver";
