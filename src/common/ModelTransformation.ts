@@ -194,7 +194,6 @@ export class Pattern {
   }
 
   addRelation(srcIndex: number, dstIndex: number, relation: Relation.Relation) {
-    console.log('add relation', relation, 'btwn', srcIndex, dstIndex);
     return this.graph.addEdge(srcIndex, dstIndex, relation);
   }
 
@@ -221,7 +220,6 @@ export class Pattern {
 
   async instantiate(core: GmeClasses.Core, node, assignments, createdNodes, idPrefix = "node") {
     const elements: [Element, number][] = this.getElements().map((element, i) => [element, i]);
-    console.log({ elements });
     const [nodeElements, otherElements] = partition(
       elements,
       ([e]) => e.type.isNode()
@@ -266,11 +264,10 @@ export class Pattern {
     const nodes = newNodes.concat(matchedNodes);
     const getNodeAt = (index: number) => {
       const nodePair = nodes.find(([_n, i]) => i === index);
-      assert(nodePair);
+      assert(!!nodePair);
       return nodePair[0];
     };
 
-    console.log({ nodes });
     const updateElements = otherElements.filter(([e]) => !e.type.isConstant());
     await updateElements.reduce(async (prev, [element, index]) => {
       await prev;
@@ -287,14 +284,11 @@ export class Pattern {
           ),
         );
 
-        // FIXME: why might this not find a node?
-        console.log({ hasEdge });
         const nodeWJI = getNodeAt(hasEdge[0]);
         const [nameTuple, valueTuple] = getNameValueTupleFor(
           index,
           otherEdges.concat(outEdges),
         );
-        console.log({ nameTuple })
         const rootNode = core.getRoot(node);
         const name = await this.resolveNodeProperty(
           core,
@@ -408,7 +402,7 @@ export class Pattern {
       await prev;
       const nodePath = core.getPath(node);
       if (!isRelation(node)) {
-        let metaType = core.getAttribute(core.getBaseType(node), "name");
+        let metaType = core.getAttribute(core.getBaseType(node), "name").toString();
         if (metaType === "Node") { // Short-hand for AnyNode with a base pointer
           const originPath = core.getPointerPath(node, "origin");
           const baseId = core.getPointerPath(node, "type");

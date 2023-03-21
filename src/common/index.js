@@ -2201,14 +2201,14 @@
 	    }
 	    static async fromNode(core, node) {
 	        const children = await core.loadChildren(node);
-	        const inputNode = children.find((child) => core.getAttribute(child, "name").includes("Input"));
-	        const outputNode = children.find((child) => core.getAttribute(child, "name").includes("Output"));
+	        const inputNode = children.find((child) => core.getAttribute(child, "name").toString().includes("Input"));
+	        const outputNode = children.find((child) => core.getAttribute(child, "name").toString().includes("Output"));
 	        const [inputPattern, outputPattern] = await Promise.all([
 	            Pattern.fromNode(core, inputNode),
 	            Pattern.fromNode(core, outputNode),
 	        ]);
 	        console.log("input node path:", core.getPath(inputNode));
-	        const name = core.getAttribute(node, "name");
+	        const name = core.getAttribute(node, "name").toString();
 	        return new TransformationStep(name, core, inputPattern, outputPattern);
 	    }
 	}
@@ -2246,7 +2246,6 @@
 	        return this.graph.nodes.slice();
 	    }
 	    addRelation(srcIndex, dstIndex, relation) {
-	        console.log('add relation', relation, 'btwn', srcIndex, dstIndex);
 	        return this.graph.addEdge(srcIndex, dstIndex, relation);
 	    }
 	    addCrossPatternRelation(src, dst, relation) {
@@ -2269,7 +2268,6 @@
 	    }
 	    async instantiate(core, node, assignments, createdNodes, idPrefix = "node") {
 	        const elements = this.getElements().map((element, i) => [element, i]);
-	        console.log({ elements });
 	        const [nodeElements, otherElements] = partition(elements, ([e]) => e.type.isNode());
 	        const nodeIdFor = (index) => `@id:${idPrefix}_${index}`;
 	        const [matchedNodeElements, otherNodeElements] = partition(nodeElements, ([element]) => element.type instanceof MatchedNode);
@@ -2298,10 +2296,9 @@
 	        const nodes = newNodes.concat(matchedNodes);
 	        const getNodeAt = (index) => {
 	            const nodePair = nodes.find(([_n, i]) => i === index);
-	            assert(nodePair);
+	            assert(!!nodePair);
 	            return nodePair[0];
 	        };
-	        console.log({ nodes });
 	        const updateElements = otherElements.filter(([e]) => !e.type.isConstant());
 	        await updateElements.reduce(async (prev, [element, index]) => {
 	            await prev;
@@ -2309,11 +2306,8 @@
 	            if (element.type instanceof Attribute || element.type instanceof Pointer) {
 	                const [[hasEdge], otherEdges] = partition(inEdges, ([_src, _dst, relation]) => relation instanceof Relation.Has);
 	                assert(hasEdge, new UninstantiableError(`${JSON.stringify(element.type)} missing source node ("Has" relation)`));
-	                // FIXME: why might this not find a node?
-	                console.log({ hasEdge });
 	                const nodeWJI = getNodeAt(hasEdge[0]);
 	                const [nameTuple, valueTuple] = getNameValueTupleFor(index, otherEdges.concat(outEdges));
-	                console.log({ nameTuple });
 	                const rootNode = core.getRoot(node);
 	                const name = await this.resolveNodeProperty(core, rootNode, assignments, ...nameTuple);
 	                const targetPath = await this.resolveNodeProperty(core, rootNode, assignments, ...valueTuple);
@@ -2339,7 +2333,7 @@
 	        if (isNodePath) {
 	            const node = await core.loadByPath(rootNode, indexOrNodePath);
 	            const elementNode = Pattern.getPatternChild(core, node);
-	            const elementType = core.getAttribute(core.getBaseType(elementNode), "name");
+	            const elementType = core.getAttribute(core.getBaseType(elementNode), "name").toString();
 	            const elementPath = core.getPath(elementNode);
 	            if (elementType === "Constant") {
 	                return core.getAttribute(elementNode, "value");
@@ -2406,7 +2400,7 @@
 	            await prev;
 	            const nodePath = core.getPath(node);
 	            if (!isRelation(node)) {
-	                let metaType = core.getAttribute(core.getBaseType(node), "name");
+	                let metaType = core.getAttribute(core.getBaseType(node), "name").toString();
 	                if (metaType === "Node") { // Short-hand for AnyNode with a base pointer
 	                    const originPath = core.getPointerPath(node, "origin");
 	                    const baseId = core.getPointerPath(node, "type");
@@ -2431,8 +2425,6 @@
 	            else {
 	                const srcPath = core.getPointerPath(node, "src");
 	                const dstPath = core.getPointerPath(node, "dst");
-	                // FIXME: this currently assumes a 1:1 mapping btwn nodes and elements
-	                // Actually lookup the element
 	                const elements = pattern.getElements();
 	                const srcElementIndex = elements.findIndex(element => srcPath.startsWith(element.nodePath));
 	                const dstElementIndex = elements.findIndex(element => dstPath.startsWith(element.nodePath));
@@ -2456,7 +2448,7 @@
 	    static getPatternChild(core, node) {
 	        let child = node;
 	        const isPatternType = (n) => {
-	            const metaType = core.getAttribute(core.getBaseType(n), "name");
+	            const metaType = core.getAttribute(core.getBaseType(n), "name").toString();
 	            return metaType.includes("Pattern") || metaType.includes("Structure");
 	        };
 	        while (child && !isPatternType(core.getParent(child))) {
