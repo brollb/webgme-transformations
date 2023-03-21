@@ -31,7 +31,7 @@ export default class Transformation {
   async apply(activeNode: Core.Node) {
     const node: GMENode = await GMENode.fromNode(this.core, activeNode);
     node.setActiveNode();
-    const createdNodes = {};
+    const createdNodes: CreatedNodeDict = {};
     const newNodes = await this.steps.reduce(async (refDataP, step) => {
       const refData = await refDataP;
       const matchOutputs = await step.apply(node, activeNode, createdNodes);
@@ -107,7 +107,7 @@ class TransformationStep {
     this.outputPattern = outputPattern;
   }
 
-  async apply(node: GMENode, gmeNode: Core.Node, createdNodes = {}) {
+  async apply(node: GMENode, gmeNode: Core.Node, createdNodes: CreatedNodeDict = {}) {
     console.log("---> applying step", this.name);
     const matches = await this.pattern.matches(node);
     const outputs = await Promise.all(matches.map(
@@ -117,7 +117,7 @@ class TransformationStep {
           gmeNode,
           match,
           createdNodes,
-          index,
+          index.toString(),
         ),
     ));
     return outputs;
@@ -154,13 +154,10 @@ export class Pattern {
     this.nodePaths = {};
   }
 
-  async matches(node) { // TODO: it might be nice to make this synchronous instead...
+  async matches(node: GMENode) { // TODO: it might be nice to make this synchronous instead...
     const engine = await getEngine();
     this.ensureCanMatch();
-    const assignments = engine.find_matches(node, this.toEngineJSON());
-    console.log("find_matches:", node, this.toEngineJSON(), "\n", {
-      assignments,
-    });
+    const assignments: EngineAssignment[] = engine.find_matches(node, this.toEngineJSON());
     return assignments.map((a) => mapKeys(a.matches, (k) => this.nodePaths[k]));
   }
 
@@ -218,7 +215,13 @@ export class Pattern {
     return this.graph.edges.concat(this.externalRelations);
   }
 
-  async instantiate(core: GmeClasses.Core, node, assignments, createdNodes, idPrefix = "node") {
+  async instantiate(
+    core: GmeClasses.Core,
+    node: Core.Node,
+    assignments: EngineMatches,
+    createdNodes: CreatedNodeDict,
+    idPrefix = "node"
+  ) {
     const elements: [Element, number][] = this.getElements().map((element, i) => [element, i]);
     const [nodeElements, otherElements] = partition(
       elements,
@@ -240,24 +243,31 @@ export class Pattern {
         const modelElement = assignments[inputElementPath];
         const nodePath = modelElement.Node;
         assert(
-          createdNodes[nodePath],
+          !!createdNodes[nodePath],
           new NoMatchedNodeError(nodePath),
         );
         return [createdNodes[nodePath], index];
       });
 
+    const newNodesStep: CreatedNodeDict = {};
     const newNodes = otherNodeElements.map(([element, index]) => {
       const node = new JsonNode(nodeIdFor(index));
 
+      console.log('making new node for', element, node);
       if (assignments[element.originPath]) {
         const assignedElement = assignments[element.originPath];
         assert(
-          assignedElement.Node,
+          !!assignedElement.Node,
           new UnimplementedError("Referencing non-Node origins"),
         );
         const nodePath = assignedElement.Node;
         createdNodes[nodePath] = node;
       }
+
+      if (element.nodePath) {
+        newNodesStep[element.nodePath] = node;
+      }
+
       return [node, index];
     });
 
@@ -278,28 +288,35 @@ export class Pattern {
           ([_src, _dst, relation]) => relation instanceof Relation.Has,
         );
         assert(
-          hasEdge,
-          new UninstantiableError(
-            `${JSON.stringify(element.type)} missing source node ("Has" relation)`,
+          !!hasEdge,
+          new MissingRelation(
+            element.nodePath,
+            new Relation.Has(),
           ),
         );
 
+        // TODO: Check that there is only a single Has edge
         const nodeWJI = getNodeAt(hasEdge[0]);
+
+        // Get the name/value information for With edges
         const [nameTuple, valueTuple] = getNameValueTupleFor(
           index,
-          otherEdges.concat(outEdges),
+          otherEdges.concat(outEdges)
         );
         const rootNode = core.getRoot(node);
         const name = await this.resolveNodeProperty(
           core,
           rootNode,
           assignments,
+          newNodesStep,
           ...nameTuple,
         );
+        // TODO: make sure this works for Equal edges, too
         const targetPath = await this.resolveNodeProperty(
           core,
           rootNode,
           assignments,
+          newNodesStep,
           ...valueTuple,
         );
         const field = element.type instanceof Attribute ? "attributes" : "pointers";
@@ -326,12 +343,13 @@ export class Pattern {
   async resolveNodeProperty(
     core: GmeClasses.Core,
     rootNode: Core.Node,
-    assignments,
-    indexOrNodePath,
-    property,
+    assignments: EngineMatches,
+    newNodesStep: CreatedNodeDict,  // nodes created for elements in the output pattern
+    indexOrNodePath: number | NodePath,
+    property: Property,
   ) {
     const isNodePath = typeof indexOrNodePath === "string";
-    if (isNodePath) {
+    if (isNodePath) {  // FIXME: does this only happen if it is in the input pattern?
       const node = await core.loadByPath(rootNode, indexOrNodePath);
       const elementNode = Pattern.getPatternChild(core, node);
       const elementType = core.getAttribute(
@@ -342,7 +360,7 @@ export class Pattern {
       if (elementType === "Constant") {
         return core.getAttribute(elementNode, "value");
       } else if (elementType.includes("Node")) {
-        return assignments[elementPath].Node;
+        return assignments[elementPath].Node;  // FIXME: I believe this is incorrect
       } else if (elementType === "Attribute") {
         const [nodeId, attrName] = assignments[elementPath].Attribute;
         if (property === Property.Name) {
@@ -367,6 +385,8 @@ export class Pattern {
         return element.type.value;
       } else if (element.type instanceof NodeConstant) {
         return element.type.path;
+      } else if (newNodesStep[element.nodePath]) {  // referencing another output element
+        return newNodesStep[element.nodePath].id;
       } else {
         assert(false, new Error(`Unknown element type`));
       }
@@ -525,7 +545,7 @@ export class Pattern {
     }
   }
 
-  static getRelationElementForNode(core, node, source, target) {
+  static getRelationElementForNode(core: GmeClasses.Core, node: Core.Node, source: Endpoint, target: Endpoint) {
     const metaType = core.getAttribute(core.getBaseType(node), "name");
     switch (metaType) {
       case "has":
@@ -536,6 +556,9 @@ export class Pattern {
         return new Relation.With(srcProperty, dstProperty);
       case "child of":
         return new Relation.ChildOf();
+      case "equal nodes":
+        // Set a node property to another node.
+        return new Relation.With(Property.Value, Property.Value);
       default:
         throw new Error(`Unknown relation type: ${metaType}`);
     }
@@ -900,7 +923,22 @@ function mapKeys<T>(obj: { [key: string]: T }, fn: (k: string) => string) {
   );
 }
 
-class UninstantiableError extends Error { }
+interface ModelError {
+  nodePath: string;
+}
+
+class MissingRelation extends Error implements ModelError {
+  nodePath: string;
+  relation: Relation.Relation;
+
+  constructor(nodePath: string, relation: Relation.Relation) {
+    super(`Missing relation with ${nodePath}: ${relation.constructor.name}`);
+    this.nodePath = nodePath;
+    this.relation = relation;
+  }
+
+}
+
 class NoMatchedNodeError extends Error {
   nodePath: string;
 
@@ -918,6 +956,32 @@ class UnimplementedError extends Error {
     this.action = action;
   }
 }
+
+// An assignment returned from the engine
+interface EngineAssignment {
+  matches: EngineMatches
+}
+
+type EngineMatches = { [nodeIndex: number]: Reference };  // from engine/src/assignment.rs
+
+type Reference = NodeRef | AttrRef | PtrRef | SetRef;
+interface NodeRef {
+  Node: NodePath,
+}
+
+interface AttrRef {
+  Attribute: [NodePath, string],
+}
+
+interface PtrRef {
+  Pointer: [NodePath, string],
+}
+
+interface SetRef {
+  Set: [NodePath, string],
+}
+
+type CreatedNodeDict = { [nodePath: NodePath]: JsonNode };
 
 // FIXME: we should probably swap to WJI instead...
 class JsonNode {

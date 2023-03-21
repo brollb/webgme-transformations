@@ -2196,7 +2196,7 @@
 	    async apply(node, gmeNode, createdNodes = {}) {
 	        console.log("---> applying step", this.name);
 	        const matches = await this.pattern.matches(node);
-	        const outputs = await Promise.all(matches.map((match, index) => this.outputPattern.instantiate(this.core, gmeNode, match, createdNodes, index)));
+	        const outputs = await Promise.all(matches.map((match, index) => this.outputPattern.instantiate(this.core, gmeNode, match, createdNodes, index.toString())));
 	        return outputs;
 	    }
 	    static async fromNode(core, node) {
@@ -2222,9 +2222,6 @@
 	        const engine = await getEngine();
 	        this.ensureCanMatch();
 	        const assignments = engine.find_matches(node, this.toEngineJSON());
-	        console.log("find_matches:", node, this.toEngineJSON(), "\n", {
-	            assignments,
-	        });
 	        return assignments.map((a) => mapKeys(a.matches, (k) => this.nodePaths[k]));
 	    }
 	    ensureCanMatch() {
@@ -2280,16 +2277,21 @@
 	            const inputElementPath = element.type.matchPath;
 	            const modelElement = assignments[inputElementPath];
 	            const nodePath = modelElement.Node;
-	            assert(createdNodes[nodePath], new NoMatchedNodeError(nodePath));
+	            assert(!!createdNodes[nodePath], new NoMatchedNodeError(nodePath));
 	            return [createdNodes[nodePath], index];
 	        });
+	        const newNodesStep = {};
 	        const newNodes = otherNodeElements.map(([element, index]) => {
 	            const node = new JsonNode(nodeIdFor(index));
+	            console.log('making new node for', element, node);
 	            if (assignments[element.originPath]) {
 	                const assignedElement = assignments[element.originPath];
-	                assert(assignedElement.Node, new UnimplementedError("Referencing non-Node origins"));
+	                assert(!!assignedElement.Node, new UnimplementedError("Referencing non-Node origins"));
 	                const nodePath = assignedElement.Node;
 	                createdNodes[nodePath] = node;
+	            }
+	            if (element.nodePath) {
+	                newNodesStep[element.nodePath] = node;
 	            }
 	            return [node, index];
 	        });
@@ -2305,12 +2307,15 @@
 	            const [outEdges, inEdges] = this.getRelationsWith(index);
 	            if (element.type instanceof Attribute || element.type instanceof Pointer) {
 	                const [[hasEdge], otherEdges] = partition(inEdges, ([_src, _dst, relation]) => relation instanceof Relation.Has);
-	                assert(hasEdge, new UninstantiableError(`${JSON.stringify(element.type)} missing source node ("Has" relation)`));
+	                assert(!!hasEdge, new MissingRelation(element.nodePath, new Relation.Has()));
+	                // TODO: Check that there is only a single Has edge
 	                const nodeWJI = getNodeAt(hasEdge[0]);
+	                // Get the name/value information for With edges
 	                const [nameTuple, valueTuple] = getNameValueTupleFor(index, otherEdges.concat(outEdges));
 	                const rootNode = core.getRoot(node);
-	                const name = await this.resolveNodeProperty(core, rootNode, assignments, ...nameTuple);
-	                const targetPath = await this.resolveNodeProperty(core, rootNode, assignments, ...valueTuple);
+	                const name = await this.resolveNodeProperty(core, rootNode, assignments, newNodesStep, ...nameTuple);
+	                // TODO: make sure this works for Equal edges, too
+	                const targetPath = await this.resolveNodeProperty(core, rootNode, assignments, newNodesStep, ...valueTuple);
 	                const field = element.type instanceof Attribute ? "attributes" : "pointers";
 	                nodeWJI[field][name] = targetPath;
 	            }
@@ -2328,9 +2333,10 @@
 	        });
 	        return newNodes.map(([node, index]) => node);
 	    }
-	    async resolveNodeProperty(core, rootNode, assignments, indexOrNodePath, property) {
+	    async resolveNodeProperty(core, rootNode, assignments, newNodesStep, // nodes created for elements in the output pattern
+	    indexOrNodePath, property) {
 	        const isNodePath = typeof indexOrNodePath === "string";
-	        if (isNodePath) {
+	        if (isNodePath) { // FIXME: does this only happen if it is in the input pattern?
 	            const node = await core.loadByPath(rootNode, indexOrNodePath);
 	            const elementNode = Pattern.getPatternChild(core, node);
 	            const elementType = core.getAttribute(core.getBaseType(elementNode), "name").toString();
@@ -2339,7 +2345,7 @@
 	                return core.getAttribute(elementNode, "value");
 	            }
 	            else if (elementType.includes("Node")) {
-	                return assignments[elementPath].Node;
+	                return assignments[elementPath].Node; // FIXME: I believe this is incorrect
 	            }
 	            else if (elementType === "Attribute") {
 	                const [nodeId, attrName] = assignments[elementPath].Attribute;
@@ -2365,6 +2371,9 @@
 	            }
 	            else if (element.type instanceof NodeConstant) {
 	                return element.type.path;
+	            }
+	            else if (newNodesStep[element.nodePath]) { // referencing another output element
+	                return newNodesStep[element.nodePath].id;
 	            }
 	            else {
 	                assert(false, new Error(`Unknown element type`));
@@ -2498,6 +2507,9 @@
 	                return new Relation.With(srcProperty, dstProperty);
 	            case "child of":
 	                return new Relation.ChildOf();
+	            case "equal nodes":
+	                // Set a node property to another node.
+	                return new Relation.With(Property.Value, Property.Value);
 	            default:
 	                throw new Error(`Unknown relation type: ${metaType}`);
 	        }
@@ -2782,7 +2794,12 @@
 	function mapKeys(obj, fn) {
 	    return Object.fromEntries(Object.entries(obj).map(([k, v]) => [fn(k), v]));
 	}
-	class UninstantiableError extends Error {
+	class MissingRelation extends Error {
+	    constructor(nodePath, relation) {
+	        super(`Missing relation with ${nodePath}: ${relation.constructor.name}`);
+	        this.nodePath = nodePath;
+	        this.relation = relation;
+	    }
 	}
 	class NoMatchedNodeError extends Error {
 	    constructor(nodePath) {
