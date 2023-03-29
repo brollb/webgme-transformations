@@ -194,11 +194,15 @@ export class Pattern {
     return this.graph.addEdge(srcIndex, dstIndex, relation);
   }
 
-  addCrossPatternRelation(src, dst, relation) {
+  addCrossPatternRelation(
+    src: NodePath | number,
+    dst: NodePath | number,
+    relation: Relation.Relation
+  ) {
     this.externalRelations.push([src, dst, relation]);
   }
 
-  getRelationsWith(index) {
+  getRelationsWith(index: number) {
     const edges = this.graph.getEdges(index);
     this.externalRelations.forEach(([src, dst, relation]) => {
       if (src === index) {
@@ -221,7 +225,7 @@ export class Pattern {
     assignments: EngineMatches,
     createdNodes: CreatedNodeDict,
     idPrefix = "node"
-  ) {
+  ): Promise<JsonNode[]> {
     const elements: [Element, number][] = this.getElements().map((element, i) => [element, i]);
     const [nodeElements, otherElements] = partition(
       elements,
@@ -233,7 +237,7 @@ export class Pattern {
       nodeElements,
       ([element]) => element.type instanceof MatchedNode,
     );
-    const matchedNodes = matchedNodeElements
+    const matchedNodes: [JsonNode, number][] = matchedNodeElements
       .map(([element, index]) => {
         // Resolving matched nodes is a little involved. We need to:
         //   - find the input element being referenced
@@ -250,7 +254,7 @@ export class Pattern {
       });
 
     const newNodesStep: CreatedNodeDict = {};
-    const newNodes = otherNodeElements.map(([element, index]) => {
+    const newNodes: [JsonNode, number][] = otherNodeElements.map(([element, index]) => {
       const node = new JsonNode(nodeIdFor(index));
 
       console.log('making new node for', element, node);
@@ -334,10 +338,12 @@ export class Pattern {
       .forEach(([src, dst]) => {
         const dstNode = getNodeAt(dst);
         const srcNode = getNodeAt(src);
+        // FIXME: some parents are not being set...
+        // Maybe they are the ones referencing another node tin the output pattern ?
         srcNode.parent = dstNode;
       });
 
-    return newNodes.map(([node, index]) => node);
+    return newNodes.map(([node, _index]) => node);
   }
 
   async resolveNodeProperty(
@@ -588,7 +594,7 @@ class Graph {
     this.edges.push([srcIndex, dstIndex, weight]);
   }
 
-  getEdges(index) {
+  getEdges(index: number) {
     const edges = [[], []];
     this.edges.forEach((edge) => {
       const [src, dst] = edge;

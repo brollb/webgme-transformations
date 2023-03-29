@@ -2329,9 +2329,11 @@
 	            .forEach(([src, dst]) => {
 	            const dstNode = getNodeAt(dst);
 	            const srcNode = getNodeAt(src);
+	            // FIXME: some parents are not being set...
+	            // Maybe they are the ones referencing another node tin the output pattern ?
 	            srcNode.parent = dstNode;
 	        });
-	        return newNodes.map(([node, index]) => node);
+	        return newNodes.map(([node, _index]) => node);
 	    }
 	    async resolveNodeProperty(core, rootNode, assignments, newNodesStep, // nodes created for elements in the output pattern
 	    indexOrNodePath, property) {
@@ -2859,7 +2861,6 @@
 	    // keep track of the current state (ie, transform and input model)
 	    constructor(client, defaultTransformation, callback) {
 	        this.callback = callback;
-	        this.defaultTransFactory = defaultTransformation;
 	        this.state = new TransformState();
 	        this.modelObserver = new NodeObserver(client, async () => {
 	            const input = await this._getNode(client, this.inputPath.unwrap());
@@ -2894,9 +2895,10 @@
 	        this.transformPath = dist.Option.from(transformPath);
 	        console.log(this.inputPath);
 	        console.log(this.transformPath);
-	        this.modelObserver.observe(inputPath, Infinity);
+	        const depth = Number.MAX_SAFE_INTEGER;
+	        this.modelObserver.observe(inputPath, depth);
 	        if (this.transformPath.isSome()) {
-	            this.transformObserver.observe(transformPath, Infinity);
+	            this.transformObserver.observe(transformPath, depth);
 	        }
 	        else {
 	            this.transformObserver.disconnect();

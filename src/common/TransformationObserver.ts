@@ -63,20 +63,22 @@ export default class TransformationObserver {
   private inputPath: Option<string>;
   private transformPath: Option<string>;
   private state: TransformState;
-  private defaultTransFactory: (core: GmeClasses.Core) => Transformation;
   private callback: (output: any) => void | Promise<void>;
   // keep track of the current state (ie, transform and input model)
 
-  constructor(client, defaultTransformation, callback) {
+  constructor(
+    client: Gme.Client,
+    defaultTransformation: (core: GmeClasses.Core) => Transformation,
+    callback,
+  ) {
     this.callback = callback;
-    this.defaultTransFactory = defaultTransformation;
 
     this.state = new TransformState();
     this.modelObserver = new NodeObserver(client, async () => {
       const input = await this._getNode(client, this.inputPath.unwrap());
       this.state.input = Some(input);
 
-      let transformation;
+      let transformation: Transformation;
       if (this.state.transformation.isSome()) {
         transformation = this.state.transformation.unwrap();
       } else if (this.transformPath.isNone()) { // use the default if no transformation defined
@@ -105,17 +107,18 @@ export default class TransformationObserver {
     });
   }
 
-  observe(inputPath, transformPath) {
+  observe(inputPath: string, transformPath: string) {
     // use the client to subscribe to changes in each (territories)
     this.inputPath = Option.from(inputPath);
     this.transformPath = Option.from(transformPath);
     console.log(this.inputPath);
     console.log(this.transformPath);
 
-    this.modelObserver.observe(inputPath, Infinity);
+    const depth = Number.MAX_SAFE_INTEGER;
+    this.modelObserver.observe(inputPath, depth);
 
     if (this.transformPath.isSome()) {
-      this.transformObserver.observe(transformPath, Infinity);
+      this.transformObserver.observe(transformPath, depth);
     } else {
       this.transformObserver.disconnect();
     }
@@ -127,7 +130,7 @@ export default class TransformationObserver {
   }
 
   private async _getCoreInstance(
-    client,
+    client: Gme.Client,
   ): Promise<{ core: GmeClasses.Core; rootNode: Core.Node }> {
     return new Promise((resolve, reject) => {
       client.getCoreInstance({}, (err, result) => {
@@ -138,7 +141,7 @@ export default class TransformationObserver {
   }
 
   private async _getTransformation(
-    client,
+    client: Gme.Client,
     nodePath: string,
   ): Promise<Transformation> {
     const { core, rootNode } = await this._getCoreInstance(client);
@@ -146,12 +149,18 @@ export default class TransformationObserver {
     return await Transformation.fromNode(core, transformationNode);
   }
 
-  private async _getNode(client, nodePath): Promise<Core.Node> {
+  private async _getNode(
+    client: Gme.Client,
+    nodePath: string,
+  ): Promise<Core.Node> {
     const { core, rootNode } = await this._getCoreInstance(client);
     return await core.loadByPath(rootNode, nodePath);
   }
 
-  private async _runTransformation(transformation, input): Promise<void> {
+  private async _runTransformation(
+    transformation: Transformation,
+    input: Core.Node,
+  ): Promise<void> {
     const output = await transformation.apply(input);
     this.callback(output);
   }
