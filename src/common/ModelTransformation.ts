@@ -7,7 +7,7 @@ declare global {
 //@ts-ignore
 import type from "webgme";
 
-import engineModule from "./engine/index";
+import engineModule from "./engine/index";  // TODO: add the types?
 let enginePromise;
 function getEngine() {
   if (!enginePromise) {
