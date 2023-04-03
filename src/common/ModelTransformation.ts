@@ -7,7 +7,8 @@ declare global {
 //@ts-ignore
 import type from "webgme";
 
-import engineModule from "./engine/index";  // TODO: add the types?
+import engineModule from "./engine/index"; // TODO: add the types?
+console.log({ engineModule });
 let enginePromise;
 function getEngine() {
   if (!enginePromise) {
@@ -99,7 +100,12 @@ class TransformationStep {
   private pattern: Pattern;
   private outputPattern: Pattern;
 
-  constructor(name: string, core: GmeClasses.Core, pattern: Pattern, outputPattern: Pattern) {
+  constructor(
+    name: string,
+    core: GmeClasses.Core,
+    pattern: Pattern,
+    outputPattern: Pattern,
+  ) {
     this.name = name;
     this.core = core;
     this.pattern = pattern;
@@ -107,7 +113,11 @@ class TransformationStep {
     this.outputPattern = outputPattern;
   }
 
-  async apply(node: GMENode, gmeNode: Core.Node, createdNodes: CreatedNodeDict = {}) {
+  async apply(
+    node: GMENode,
+    gmeNode: Core.Node,
+    createdNodes: CreatedNodeDict = {},
+  ) {
     console.log("---> applying step", this.name);
     const matches = await this.pattern.matches(node);
     const outputs = await Promise.all(matches.map(
@@ -157,7 +167,10 @@ export class Pattern {
   async matches(node: GMENode) { // TODO: it might be nice to make this synchronous instead...
     const engine = await getEngine();
     this.ensureCanMatch();
-    const assignments: EngineAssignment[] = engine.find_matches(node, this.toEngineJSON());
+    const assignments: EngineAssignment[] = engine.find_matches(
+      node,
+      this.toEngineJSON(),
+    );
     return assignments.map((a) => mapKeys(a.matches, (k) => this.nodePaths[k]));
   }
 
@@ -170,7 +183,7 @@ export class Pattern {
       !matchedNode,
       new Error(
         "Matched nodes cannot be in input patterns: " +
-        JSON.stringify(matchedNode),
+          JSON.stringify(matchedNode),
       ),
     );
   }
@@ -182,7 +195,7 @@ export class Pattern {
 
   addElement(node: Element, nodePath: Option<GmeCommon.Path>) {
     const index = this.graph.addNode(node);
-    nodePath.map(nodePath => this.nodePaths[index] = nodePath);
+    nodePath.map((nodePath) => this.nodePaths[index] = nodePath);
     return index;
   }
 
@@ -197,7 +210,7 @@ export class Pattern {
   addCrossPatternRelation(
     src: NodePath | number,
     dst: NodePath | number,
-    relation: Relation.Relation
+    relation: Relation.Relation,
   ) {
     this.externalRelations.push([src, dst, relation]);
   }
@@ -224,12 +237,15 @@ export class Pattern {
     node: Core.Node,
     assignments: EngineMatches,
     createdNodes: CreatedNodeDict,
-    idPrefix = "node"
+    idPrefix = "node",
   ): Promise<JsonNode[]> {
-    const elements: [Element, number][] = this.getElements().map((element, i) => [element, i]);
+    const elements: [Element, number][] = this.getElements().map((
+      element,
+      i,
+    ) => [element, i]);
     const [nodeElements, otherElements] = partition(
       elements,
-      ([e]) => e.type.isNode()
+      ([e]) => e.type.isNode(),
     );
     const nodeIdFor = (index: string) => `@id:${idPrefix}_${index}`;
 
@@ -254,26 +270,28 @@ export class Pattern {
       });
 
     const newNodesStep: CreatedNodeDict = {};
-    const newNodes: [JsonNode, number][] = otherNodeElements.map(([element, index]) => {
-      const node = new JsonNode(nodeIdFor(index));
+    const newNodes: [JsonNode, number][] = otherNodeElements.map(
+      ([element, index]) => {
+        const node = new JsonNode(nodeIdFor(index));
 
-      console.log('making new node for', element, node);
-      if (assignments[element.originPath]) {
-        const assignedElement = assignments[element.originPath];
-        assert(
-          !!assignedElement.Node,
-          new UnimplementedError("Referencing non-Node origins"),
-        );
-        const nodePath = assignedElement.Node;
-        createdNodes[nodePath] = node;
-      }
+        console.log("making new node for", element, node);
+        if (assignments[element.originPath]) {
+          const assignedElement = assignments[element.originPath];
+          assert(
+            !!assignedElement.Node,
+            new UnimplementedError("Referencing non-Node origins"),
+          );
+          const nodePath = assignedElement.Node;
+          createdNodes[nodePath] = node;
+        }
 
-      if (element.nodePath) {
-        newNodesStep[element.nodePath] = node;
-      }
+        if (element.nodePath) {
+          newNodesStep[element.nodePath] = node;
+        }
 
-      return [node, index];
-    });
+        return [node, index];
+      },
+    );
 
     const nodes = newNodes.concat(matchedNodes);
     const getNodeAt = (index: number) => {
@@ -286,7 +304,9 @@ export class Pattern {
     await updateElements.reduce(async (prev, [element, index]) => {
       await prev;
       const [outEdges, inEdges] = this.getRelationsWith(index);
-      if (element.type instanceof Attribute || element.type instanceof Pointer) {
+      if (
+        element.type instanceof Attribute || element.type instanceof Pointer
+      ) {
         const [[hasEdge], otherEdges] = partition(
           inEdges,
           ([_src, _dst, relation]) => relation instanceof Relation.Has,
@@ -305,7 +325,7 @@ export class Pattern {
         // Get the name/value information for With edges
         const [nameTuple, valueTuple] = getNameValueTupleFor(
           index,
-          otherEdges.concat(outEdges)
+          otherEdges.concat(outEdges),
         );
         const rootNode = core.getRoot(node);
         const name = await this.resolveNodeProperty(
@@ -323,7 +343,9 @@ export class Pattern {
           newNodesStep,
           ...valueTuple,
         );
-        const field = element.type instanceof Attribute ? "attributes" : "pointers";
+        const field = element.type instanceof Attribute
+          ? "attributes"
+          : "pointers";
         nodeWJI[field][name] = targetPath;
       } else {
         throw new Error(
@@ -350,12 +372,12 @@ export class Pattern {
     core: GmeClasses.Core,
     rootNode: Core.Node,
     assignments: EngineMatches,
-    newNodesStep: CreatedNodeDict,  // nodes created for elements in the output pattern
+    newNodesStep: CreatedNodeDict, // nodes created for elements in the output pattern
     indexOrNodePath: number | NodePath,
     property: Property,
   ) {
     const isNodePath = typeof indexOrNodePath === "string";
-    if (isNodePath) {  // FIXME: does this only happen if it is in the input pattern?
+    if (isNodePath) { // FIXME: does this only happen if it is in the input pattern?
       const node = await core.loadByPath(rootNode, indexOrNodePath);
       const elementNode = Pattern.getPatternChild(core, node);
       const elementType = core.getAttribute(
@@ -366,7 +388,7 @@ export class Pattern {
       if (elementType === "Constant") {
         return core.getAttribute(elementNode, "value");
       } else if (elementType.includes("Node")) {
-        return assignments[elementPath].Node;  // FIXME: I believe this is incorrect
+        return assignments[elementPath].Node; // FIXME: I believe this is incorrect
       } else if (elementType === "Attribute") {
         const [nodeId, attrName] = assignments[elementPath].Attribute;
         if (property === Property.Name) {
@@ -391,7 +413,7 @@ export class Pattern {
         return element.type.value;
       } else if (element.type instanceof NodeConstant) {
         return element.type.path;
-      } else if (newNodesStep[element.nodePath]) {  // referencing another output element
+      } else if (newNodesStep[element.nodePath]) { // referencing another output element
         return newNodesStep[element.nodePath].id;
       } else {
         assert(false, new Error(`Unknown element type`));
@@ -423,12 +445,13 @@ export class Pattern {
 
     const pattern = new Pattern();
 
-    const elementsByNodePath = {};  // mapping from node path to element
+    const elementsByNodePath = {}; // mapping from node path to element
     await elementNodes.reduce(async (prev, node) => {
       await prev;
       const nodePath = core.getPath(node);
       if (!isRelation(node)) {
-        let metaType = core.getAttribute(core.getBaseType(node), "name").toString();
+        let metaType = core.getAttribute(core.getBaseType(node), "name")
+          .toString();
         if (metaType === "Node") { // Short-hand for AnyNode with a base pointer
           const originPath = core.getPointerPath(node, "origin");
           const baseId = core.getPointerPath(node, "type");
@@ -470,8 +493,12 @@ export class Pattern {
         const srcPath = core.getPointerPath(node, "src");
         const dstPath = core.getPointerPath(node, "dst");
         const elements = pattern.getElements();
-        const srcElementIndex = elements.findIndex(element => srcPath.startsWith(element.nodePath));
-        const dstElementIndex = elements.findIndex(element => dstPath.startsWith(element.nodePath));
+        const srcElementIndex = elements.findIndex((element) =>
+          srcPath.startsWith(element.nodePath)
+        );
+        const dstElementIndex = elements.findIndex((element) =>
+          dstPath.startsWith(element.nodePath)
+        );
         const srcElement = elements[srcElementIndex];
         const dstElement = elements[dstElementIndex];
         const src = await Endpoint.from(
@@ -509,7 +536,8 @@ export class Pattern {
   static getPatternChild(core: GmeClasses.Core, node: Core.Node): Core.Node {
     let child = node;
     const isPatternType = (n: Core.Node) => {
-      const metaType = core.getAttribute(core.getBaseType(n), "name").toString();
+      const metaType = core.getAttribute(core.getBaseType(n), "name")
+        .toString();
       return metaType.includes("Pattern") || metaType.includes("Structure");
     };
     while (child && !isPatternType(core.getParent(child))) {
@@ -518,7 +546,11 @@ export class Pattern {
     return child;
   }
 
-  static getElementForNode(core: GmeClasses.Core, node: Core.Node, metaType: string) {
+  static getElementForNode(
+    core: GmeClasses.Core,
+    node: Core.Node,
+    metaType: string,
+  ) {
     const type = Pattern.getElementTypeForNode(core, node, metaType);
     const nodePath = core.getPath(node);
     const originPath = core.getPointerPath(node, "origin");
@@ -526,7 +558,11 @@ export class Pattern {
     return new Element(type, nodePath, originPath);
   }
 
-  static getElementTypeForNode(core: GmeClasses.Core, node: Core.Node, metaType: string) {
+  static getElementTypeForNode(
+    core: GmeClasses.Core,
+    node: Core.Node,
+    metaType: string,
+  ) {
     switch (metaType) {
       case "ActiveNode":
         return new ActiveNode();
@@ -551,7 +587,12 @@ export class Pattern {
     }
   }
 
-  static getRelationElementForNode(core: GmeClasses.Core, node: Core.Node, source: Endpoint, target: Endpoint) {
+  static getRelationElementForNode(
+    core: GmeClasses.Core,
+    node: Core.Node,
+    source: Endpoint,
+    target: Endpoint,
+  ) {
     const metaType = core.getAttribute(core.getBaseType(node), "name");
     switch (metaType) {
       case "has":
@@ -613,7 +654,9 @@ class Graph {
   toEngineJSON() {
     return {
       nodes: this.nodes.map((element) => element.type.toEngineJSON()),
-      edges: this.edges.map(([srcIndex, dstIndex, relation]) => [srcIndex, dstIndex, relation.toEngineJSON()]),
+      edges: this.edges.map((
+        [srcIndex, dstIndex, relation],
+      ) => [srcIndex, dstIndex, relation.toEngineJSON()]),
       node_holes: this.node_holes,
       edge_property: this.edge_property,
     };
@@ -626,8 +669,12 @@ interface ElementType extends EngineSerializable {
 }
 
 class ActiveNode implements ElementType {
-  isNode(): boolean { return true; }
-  isConstant(): boolean { return false; }
+  isNode(): boolean {
+    return true;
+  }
+  isConstant(): boolean {
+    return false;
+  }
 
   toEngineJSON() {
     return {
@@ -636,9 +683,13 @@ class ActiveNode implements ElementType {
   }
 }
 
-class AnyNode implements ElementType {
-  isNode(): boolean { return true; }
-  isConstant(): boolean { return false; }
+export class AnyNode implements ElementType {
+  isNode(): boolean {
+    return true;
+  }
+  isConstant(): boolean {
+    return false;
+  }
   toEngineJSON() {
     return ({
       Node: "AnyNode",
@@ -651,8 +702,12 @@ class MatchedNode implements ElementType {
   constructor(matchPath: string) {
     this.matchPath = matchPath;
   }
-  isNode(): boolean { return true; }
-  isConstant(): boolean { return false; }
+  isNode(): boolean {
+    return true;
+  }
+  isConstant(): boolean {
+    return false;
+  }
   toEngineJSON() {
     return ({
       Node: { MatchedNode: this.matchPath },
@@ -661,16 +716,24 @@ class MatchedNode implements ElementType {
 }
 
 class Attribute implements ElementType {
-  isNode(): boolean { return false; }
-  isConstant(): boolean { return false; }
+  isNode(): boolean {
+    return false;
+  }
+  isConstant(): boolean {
+    return false;
+  }
   toEngineJSON() {
     return "Attribute";
   }
 }
 
 class Pointer implements ElementType {
-  isNode(): boolean { return false; }
-  isConstant(): boolean { return false; }
+  isNode(): boolean {
+    return false;
+  }
+  isConstant(): boolean {
+    return false;
+  }
   toEngineJSON() {
     return "Pointer";
   }
@@ -682,8 +745,12 @@ class Constant implements ElementType {
     this.value = value;
   }
 
-  isConstant(): boolean { return true; }
-  isNode(): boolean { return false; }
+  isConstant(): boolean {
+    return true;
+  }
+  isNode(): boolean {
+    return false;
+  }
   toEngineJSON() {
     return ({
       Constant: {
@@ -699,8 +766,12 @@ class NodeConstant implements ElementType {
   constructor(path: string) {
     this.path = path;
   }
-  isNode(): boolean { return true; }
-  isConstant(): boolean { return true; }
+  isNode(): boolean {
+    return true;
+  }
+  isConstant(): boolean {
+    return true;
+  }
   toEngineJSON() {
     return ({
       Constant: {
@@ -727,7 +798,7 @@ interface EngineSerializable {
 }
 
 namespace Relation {
-  export interface Relation extends EngineSerializable { }
+  export interface Relation extends EngineSerializable {}
 
   export class Has implements Relation {
     toEngineJSON() {
@@ -756,6 +827,12 @@ namespace Relation {
       };
     }
   }
+
+  export class Equal implements Relation {
+    toEngineJSON() {
+      return "Equal";
+    }
+  }
 }
 
 enum Property {
@@ -764,7 +841,7 @@ enum Property {
 }
 
 namespace Primitive {
-  export interface Primitive { }
+  export interface Primitive {}
 
   class String implements Primitive {
     String: string; // non-standard casing to make JSON rep engine-compatible
@@ -868,6 +945,21 @@ class GMENode {
   }
 }
 
+function partitionBy<T>(
+  list: T[],
+  keyFn: (item: T) => string,
+): { [key: string]: T[] } {
+  const result = {};
+  list.forEach((item) => {
+    const key = keyFn(item);
+    if (!result[key]) {
+      result[key] = [];
+    }
+    result[key].push(item);
+  });
+  return result;
+}
+
 function partition<T>(list: T[], fn: (item: T) => boolean) {
   const result = [[], []];
   list.forEach((item) => {
@@ -900,6 +992,8 @@ function getNameValueTupleFor(attrIndex: number, edges) {
   const withEdges: [number, number, Relation.With][] = edges
     .filter(([, , relation]) => relation instanceof Relation.With);
 
+  // FIXME: what if there is no with edge for the value of a pointer?
+  // FIXME: we could add a "WithNode"
   for (const edge of withEdges) {
     const [srcIndex, dstIndex, relation] = edge;
     const endpoints: [[number, Property], [number, Property]] = [
@@ -942,7 +1036,6 @@ class MissingRelation extends Error implements ModelError {
     this.nodePath = nodePath;
     this.relation = relation;
   }
-
 }
 
 class NoMatchedNodeError extends Error {
@@ -965,26 +1058,26 @@ class UnimplementedError extends Error {
 
 // An assignment returned from the engine
 interface EngineAssignment {
-  matches: EngineMatches
+  matches: EngineMatches;
 }
 
-type EngineMatches = { [nodeIndex: number]: Reference };  // from engine/src/assignment.rs
+type EngineMatches = { [nodeIndex: number]: Reference }; // from engine/src/assignment.rs
 
 type Reference = NodeRef | AttrRef | PtrRef | SetRef;
 interface NodeRef {
-  Node: NodePath,
+  Node: NodePath;
 }
 
 interface AttrRef {
-  Attribute: [NodePath, string],
+  Attribute: [NodePath, string];
 }
 
 interface PtrRef {
-  Pointer: [NodePath, string],
+  Pointer: [NodePath, string];
 }
 
 interface SetRef {
-  Set: [NodePath, string],
+  Set: [NodePath, string];
 }
 
 type CreatedNodeDict = { [nodePath: NodePath]: JsonNode };

@@ -2,19 +2,19 @@
   "components": {
     "seeds": {
       "test": {
-        "src": "src/seeds/test"
+        "src": "dst/seeds/test"
       },
       "transformation": {
-        "src": "src/seeds/transformation"
+        "src": "dst/seeds/transformation"
       }
     },
     "plugins": {
       "ApplyModelTransformation": {
-        "src": "src/plugins/ApplyModelTransformation",
+        "src": "dst/plugins/ApplyModelTransformation",
         "test": "test/plugins/ApplyModelTransformation"
       },
       "ExportLibrary": {
-        "src": "src/plugins/ExportLibrary",
+        "src": "dst/plugins/ExportLibrary",
         "test": "test/plugins/ExportLibrary"
       }
     }
