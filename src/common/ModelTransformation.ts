@@ -598,18 +598,19 @@ export class Pattern {
     target: Endpoint,
   ) {
     const metaType = core.getAttribute(core.getBaseType(node), "name");
+    const nodePath = core.getPath(node);
     switch (metaType) {
       case "has":
-        return new Relation.Has();
+        return new Relation.Has(nodePath);
       case "with":
         const srcProperty = source.getProperty();
         const dstProperty = target.getProperty();
-        return new Relation.With(srcProperty, dstProperty);
+        return new Relation.With(srcProperty, dstProperty, nodePath);
       case "child of":
-        return new Relation.ChildOf();
+        return new Relation.ChildOf(nodePath);
       case "equal nodes":
         // Set a node property to another node.
-        return new Relation.With(Property.Value, Property.Value);
+        return new Relation.With(Property.Value, Property.Value, nodePath);
       default:
         throw new Error(`Unknown relation type: ${metaType}`);
     }
@@ -805,12 +806,22 @@ namespace Relation {
   export interface Relation extends EngineSerializable {}
 
   export class Has implements Relation {
+    nodePath?: NodePath;
+    constructor(nodePath?: NodePath) {
+      this.nodePath = nodePath;
+    }
+
     toEngineJSON() {
       return "Has";
     }
   }
 
   export class ChildOf implements Relation {
+    nodePath?: NodePath;
+    constructor(nodePath?: NodePath) {
+      this.nodePath = nodePath;
+    }
+
     toEngineJSON() {
       return "ChildOf";
     }
@@ -819,10 +830,16 @@ namespace Relation {
   export class With implements Relation {
     src: Property;
     dst: Property;
+    nodePath?: NodePath;
 
-    constructor(srcProperty: Property, dstProperty: Property) {
+    constructor(
+      srcProperty: Property,
+      dstProperty: Property,
+      nodePath?: NodePath,
+    ) {
       this.src = srcProperty;
       this.dst = dstProperty;
+      this.nodePath = nodePath;
     }
 
     toEngineJSON() {
@@ -833,6 +850,11 @@ namespace Relation {
   }
 
   export class Equal implements Relation {
+    nodePath?: NodePath;
+    constructor(nodePath?: NodePath) {
+      this.nodePath = nodePath;
+    }
+
     toEngineJSON() {
       return "Equal";
     }
