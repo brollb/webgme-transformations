@@ -2,3 +2,4 @@ node_modules/
 server.log
 server-error.log
 test-tmp/
+dist/
