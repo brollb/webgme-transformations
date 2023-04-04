@@ -19,8 +19,7 @@ jobs:
       - name: Run npm ci
         run: |
           npm install -g npm
-          npm ci
-          npm prepare
+          npm i
 
       - run: npm publish
         env:
