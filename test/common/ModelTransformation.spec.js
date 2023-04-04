@@ -4,9 +4,10 @@
 
 const testFixture = require("../globals");
 const assert = require("assert");
-const { ModelTransformation: Transformation, Pattern, AnyNode } = require(
-  "../../dist/common/index",
-);
+const { ModelTransformation: Transformation, Pattern, AnyNode, GMENode } =
+  require(
+    "../../dist/common/index",
+  );
 
 describe("ModelTransformation", function () {
   const _ = testFixture.requirejs("underscore");
@@ -106,6 +107,14 @@ describe("ModelTransformation", function () {
       const anyNode = nodes.find((e) => !e.type.isConstant());
       console.log({ AnyNode });
       assert(anyNode && anyNode.type instanceof AnyNode);
+    });
+  });
+
+  describe("GMENode", function () {
+    it("should not omit inherited attributes", async () => {
+      const child = core.createNode({ parent: root, base: fco });
+      const node = await GMENode.fromNode(core, child);
+      assert(node.attributes.name);
     });
   });
 
