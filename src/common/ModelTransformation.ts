@@ -933,14 +933,14 @@ class Endpoint {
 /*
  * A representation of the GME node required for the rust pattern engine.
  */
-class GMENode {
-  id: string;
+export class GMENode {
+  id: NodePath;
   attributes: { [key: string]: any };
   children: GMENode[];
   is_active: boolean;
   pointers: { [key: string]: any };
 
-  constructor(path, attributes = {}) {
+  constructor(path: NodePath, attributes = {}) {
     this.id = path;
     this.attributes = attributes;
     this.children = [];
@@ -955,7 +955,7 @@ class GMENode {
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
     const children = await core.loadChildren(node);
     const attributes = Object.fromEntries(
-      core.getOwnAttributeNames(node)
+      core.getAttributeNames(node)
         .map((name) => [name, Primitive.from(core.getAttribute(node, name))]),
     );
     const gmeNode = new GMENode(core.getPath(node), attributes);
