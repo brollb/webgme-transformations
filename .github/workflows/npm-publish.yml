@@ -20,6 +20,7 @@ jobs:
         run: |
           npm install -g npm
           npm ci
+          npm prepare
 
       - run: npm publish
         env:
