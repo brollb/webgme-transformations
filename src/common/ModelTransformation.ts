@@ -12,7 +12,6 @@ import engineModule from "./engine/index"; // TODO: add the types?
 let enginePromise;
 function getEngine() {
   if (!enginePromise) {
-    console.log("getEngine", engineModule);
     enginePromise = engineModule.create();
   }
   return enginePromise;
@@ -58,10 +57,6 @@ export default class Transformation {
 
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
     const stepNodes = sortNodeList(core, await core.loadChildren(node), "next");
-    console.log(
-      "steps:",
-      stepNodes.map((c) => [core.getPath(c), core.getAttribute(c, "name")]),
-    );
     const steps = await Promise.all(
       stepNodes.map((step) => TransformationStep.fromNode(core, step)),
     );
@@ -147,7 +142,6 @@ class TransformationStep {
       Pattern.fromNode(core, outputNode),
     ]);
 
-    console.log("input node path:", core.getPath(inputNode));
     const name = core.getAttribute(node, "name").toString();
     return new TransformationStep(name, core, inputPattern, outputPattern);
   }
@@ -498,10 +492,12 @@ export class Pattern {
         const dstPath = core.getPointerPath(node, "dst");
         const elements = pattern.getElements();
         const srcElementIndex = elements.findIndex((element) =>
-          srcPath.startsWith(element.nodePath)
+          srcPath === element.nodePath ||
+          nodePathContains(element.nodePath, srcPath)
         );
         const dstElementIndex = elements.findIndex((element) =>
-          dstPath.startsWith(element.nodePath)
+          dstPath === element.nodePath ||
+          nodePathContains(element.nodePath, dstPath)
         );
         const srcElement = elements[srcElementIndex];
         const dstElement = elements[dstElementIndex];
@@ -1041,6 +1037,10 @@ function getNameValueTupleFor(attrIndex: number, edges) {
     }
   }
   return [name, value];
+}
+
+function nodePathContains(parent: NodePath, maybeChild: NodePath): boolean {
+  return maybeChild.startsWith(parent + "/");
 }
 
 function mapKeys<T>(obj: { [key: string]: T }, fn: (k: string) => string) {
