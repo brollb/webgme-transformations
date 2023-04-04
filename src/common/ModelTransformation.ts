@@ -12,7 +12,6 @@ import engineModule from "./engine/index"; // TODO: add the types?
 let enginePromise;
 function getEngine() {
   if (!enginePromise) {
-    console.log("getEngine", engineModule);
     enginePromise = engineModule.create();
   }
   return enginePromise;
@@ -58,10 +57,6 @@ export default class Transformation {
 
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
     const stepNodes = sortNodeList(core, await core.loadChildren(node), "next");
-    console.log(
-      "steps:",
-      stepNodes.map((c) => [core.getPath(c), core.getAttribute(c, "name")]),
-    );
     const steps = await Promise.all(
       stepNodes.map((step) => TransformationStep.fromNode(core, step)),
     );
@@ -147,7 +142,6 @@ class TransformationStep {
       Pattern.fromNode(core, outputNode),
     ]);
 
-    console.log("input node path:", core.getPath(inputNode));
     const name = core.getAttribute(node, "name").toString();
     return new TransformationStep(name, core, inputPattern, outputPattern);
   }
