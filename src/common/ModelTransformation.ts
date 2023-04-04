@@ -492,10 +492,12 @@ export class Pattern {
         const dstPath = core.getPointerPath(node, "dst");
         const elements = pattern.getElements();
         const srcElementIndex = elements.findIndex((element) =>
-          srcPath.startsWith(element.nodePath)
+          srcPath === element.nodePath ||
+          nodePathContains(element.nodePath, srcPath)
         );
         const dstElementIndex = elements.findIndex((element) =>
-          dstPath.startsWith(element.nodePath)
+          dstPath === element.nodePath ||
+          nodePathContains(element.nodePath, dstPath)
         );
         const srcElement = elements[srcElementIndex];
         const dstElement = elements[dstElementIndex];
@@ -1035,6 +1037,10 @@ function getNameValueTupleFor(attrIndex: number, edges) {
     }
   }
   return [name, value];
+}
+
+function nodePathContains(parent: NodePath, maybeChild: NodePath): boolean {
+  return maybeChild.startsWith(parent + "/");
 }
 
 function mapKeys<T>(obj: { [key: string]: T }, fn: (k: string) => string) {
