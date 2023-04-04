@@ -1,0 +1,10 @@
+{
+  "fmt": {
+    "files": {
+      "exclude": [
+        "src/common/engine/index.js",
+        "src/engine"
+      ]
+    }
+  }
+}
