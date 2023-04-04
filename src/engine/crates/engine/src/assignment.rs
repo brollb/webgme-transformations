@@ -22,7 +22,7 @@ pub struct Assignment {
     pub matches: HashMap<NodeIndex, Reference>,
 }
 
-impl<'a> Assignment {
+impl Assignment {
     pub fn new() -> Self {
         Assignment {
             matches: HashMap::new(),
@@ -36,10 +36,7 @@ impl<'a> Assignment {
     }
 
     fn has_target(&self, target: &Reference) -> bool {
-        self.matches
-            .values()
-            .find(|reference| *reference == target)
-            .is_some()
+        self.matches.values().any(|reference| reference == target)
     }
 
     pub fn is_valid_target(
@@ -181,5 +178,11 @@ impl<'a> Assignment {
             (Reference::Node(node_id), Property::Value) => Primitive::String(node_id.0.clone()), // TODO: add set, etc
             _ => unreachable!("With relation can only be with Attribute GME refs"),
         }
+    }
+}
+
+impl Default for Assignment {
+    fn default() -> Self {
+        Self::new()
     }
 }

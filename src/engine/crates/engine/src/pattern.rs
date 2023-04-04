@@ -21,10 +21,7 @@ pub enum Constant {
 
 impl Element {
     pub fn needs_match(&self) -> bool {
-        match *self {
-            Element::Constant(..) => false,
-            _ => true,
-        }
+        !matches!(*self, Element::Constant(..))
     }
 }
 
@@ -92,10 +89,7 @@ impl Pattern {
     pub fn reference_elements(&self) -> Vec<NodeIndex> {
         self.graph
             .node_indices()
-            .filter_map(|id| match self.graph[id] {
-                Element::Constant(_) => None,
-                _ => Some(id),
-            })
+            .filter(|id| !matches!(self.graph[*id], Element::Constant(_)))
             .collect()
     }
 }

@@ -240,6 +240,7 @@ fn add_match_to_assignment(
 
     //      - create a new assignment with the element_target and recurse
     for element_target in element_targets {
+        println!("let's try {:?} for {:?}", &element_target, &element_idx);
         let new_assignment = partial_assignment.with(element_idx, element_target);
         assignments.append(&mut add_match_to_assignment(
             node,

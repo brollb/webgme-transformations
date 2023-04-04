@@ -1,16 +1,30 @@
-import typescript from '@rollup/plugin-typescript';
-import nodeResolve from '@rollup/plugin-node-resolve';
-import commonjs from '@rollup/plugin-commonjs';
+import typescript from "@rollup/plugin-typescript";
+import nodeResolve from "@rollup/plugin-node-resolve";
+import commonjs from "@rollup/plugin-commonjs";
+import copy from "rollup-plugin-copy";
 
-const plugins = [commonjs(), nodeResolve(), typescript()];
+const plugins = [
+  commonjs(),
+  nodeResolve(),
+  typescript(),
+  copy({
+    targets: [
+      {
+        src: "src/**/*.!(ts)",
+        dest: "dist",
+      },
+    ],
+    flatten: false,
+  }),
+];
 
 export default [
   {
-    input: 'src/common/index.ts',
+    input: "src/common/index.ts",
     output: {
-      file: 'src/common/index.js',
-      format: 'umd',
-      name: 'GMETransformations'
+      file: "dist/common/index.js",
+      format: "umd",
+      name: "GMETransformations",
     },
     plugins,
   },

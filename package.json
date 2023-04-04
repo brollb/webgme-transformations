@@ -2,8 +2,8 @@
   "name": "webgme-transformations",
   "scripts": {
     "build": "npx rollup -c rollup.config.mjs",
-    "start": "node app.js",
-    "test": "node ./node_modules/mocha/bin/mocha --recursive test",
+    "start": "node app.cjs",
+    "test": "mocha --recursive test/**/*.spec.js",
     "apply": "node ./node_modules/webgme-engine/src/bin/apply.js",
     "diff": "node ./node_modules/webgme-engine/src/bin/diff.js",
     "export": "node ./node_modules/webgme-engine/src/bin/export.js",
@@ -12,10 +12,10 @@
     "plugin": "node ./node_modules/webgme-engine/src/bin/run_plugin.js",
     "pluginHook": "node ./node_modules/webgme-engine/src/bin/plugin_hook.js",
     "users": "node ./node_modules/webgme-engine/src/bin/usermanager.js",
-    "clean_up": "node ./node_modules/webgme-engine/src/bin/clean_up.js"
+    "clean_up": "node ./node_modules/webgme-engine/src/bin/clean_up.js",
+    "prepare": "npm run build"
   },
-  "type": "module",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "peerDependencies": {
     "webgme": "^2.23.0"
   },
@@ -27,6 +27,7 @@
     "mocha": "^5.2.0",
     "oxide.ts": "^1.1.0",
     "rollup": "^3.19.1",
+    "rollup-plugin-copy": "^3.4.0",
     "tslib": "^2.5.0",
     "webgme": "^2.23.0"
   },

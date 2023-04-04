@@ -1,5 +1,5 @@
 {
-  "attributes": {"name": "Language"},
+  "attributes": { "name": "Language" },
   "children": [
     {
       "id": "@meta:Transformation",
