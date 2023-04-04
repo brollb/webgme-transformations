@@ -271,7 +271,10 @@ export class Pattern {
       });
 
     const newNodesStep: CreatedNodeDict = {};
-    const newNodes: [JsonNode, number][] = otherNodeElements.map(
+    const newNodeElements = otherNodeElements
+      .filter(([element]) => !element.type.isConstant());
+
+    const newNodes: [JsonNode, number][] = newNodeElements.map(
       ([element, index]) => {
         const node = new JsonNode(nodeIdFor(index));
 
