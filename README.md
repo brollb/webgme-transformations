@@ -1,4 +1,3 @@
 # WebGME Transformations
 
-This repository contains a simple model transformation for WebGME and logic to
-apply the given transformation.
+This is an experimental transformation language for defining model transformations within WebGME.
