@@ -89,13 +89,15 @@ impl From<GMENode> for gme::Node {
 #[wasm_bindgen]
 pub fn find_matches(node: &JsValue, pattern: &JsValue, referenced_nodes: &JsValue) -> JsValue {
     let node = node.into_serde::<GMENode>();
-    log(&format!("node deserialization result {:?}", &node));
     let node: GMENode = node.unwrap();
     let pattern = pattern.into_serde::<pattern::Pattern>();
-    log(&format!("pattern deserialization result {:?}", &pattern));
     let pattern = pattern.unwrap();
     let gme_node: gme::Node = node.into();
-    log(&format!("node\n{:?};\npattern\n{:?}", &gme_node, &pattern));
     let assignments = find_assignments(gme_node, &pattern);
     JsValue::from_serde(&assignments).unwrap()
+}
+
+#[wasm_bindgen]
+pub fn test(pattern: &JsValue, node: &JsValue, referenced_nodes: &JsValue) -> JsValue {
+    todo!("Check that there is at least one match given the pattern and node");
 }
