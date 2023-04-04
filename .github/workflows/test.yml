@@ -9,8 +9,8 @@ on:
       - main
 
 jobs:
-  test:
-    name: "Test (node 16)"
+  test_engine:
+    name: "Run Engine Tests"
     runs-on: "ubuntu-latest"
 
     steps:
@@ -22,13 +22,20 @@ jobs:
         with:
           toolchain: stable
 
-      - name: "Run Engine Tests"
+      - name: "Run Tests"
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --manifest-path src/engine/Cargo.toml
 
-      # Test transformation library
+  test_js:
+    name: "Run Tests (JS)"
+    runs-on: "ubuntu-latest"
+
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v3
+
       - name: "Use Node.js 16"
         uses: actions/setup-node@v3
         with:
@@ -42,6 +49,6 @@ jobs:
       - name: "Install Dependencies"
         run: npm install -g npm && npm install && npm run build
 
-      - name: "Run Tests (JS)"
+      - name: "Run Tests"
         run: npm test
 
