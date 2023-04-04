@@ -5,9 +5,8 @@
  * @author pmeijer / https://github.com/pmeijer
  */
 
-import * as testFixture from "webgme/test/_globals";
-//export { testFixture } from 'webgme/test/_globals';
-import * as gmeConfig from "../config/index";
+const testFixture = require("webgme/test/_globals");
+const gmeConfig = require("../config/index");
 
 // This flag will make sure the config.test.js is being used
 // process.env.NODE_ENV = 'test'; // This is set by the require above, overwrite it here.
@@ -23,4 +22,4 @@ WebGME.addToRequireJsPaths(gmeConfig);
 
 testFixture.getGmeConfig = getGmeConfig;
 
-export default testFixture;
+module.exports = testFixture;

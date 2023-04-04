@@ -8,10 +8,11 @@ declare global {
 import type from "webgme";
 
 import engineModule from "./engine/index"; // TODO: add the types?
-console.log({ engineModule });
+
 let enginePromise;
 function getEngine() {
   if (!enginePromise) {
+    console.log("getEngine", engineModule);
     enginePromise = engineModule.create();
   }
   return enginePromise;

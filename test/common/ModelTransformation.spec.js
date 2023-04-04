@@ -2,15 +2,11 @@
 
 "use strict";
 
-import testFixture from "../globals";
-import * as assert from "assert";
-import Transformation, {
-  AnyNode,
-  Pattern,
-} from "../../src/common/ModelTransformation";
-//import { dirname } from 'path';
-//import { fileURLToPath } from 'url';
-//const mydir = dirname(fileURLToPath(import.meta.url));
+const testFixture = require("../globals");
+const assert = require("assert");
+const { ModelTransformation: Transformation, Pattern, AnyNode } = require(
+  "../../dist/common/index",
+);
 
 describe("ModelTransformation", function () {
   const _ = testFixture.requirejs("underscore");
@@ -56,7 +52,7 @@ describe("ModelTransformation", function () {
   });
 
   let counter = 1;
-  async function getNewRootNode(core: GmeClasses.Core) {
+  async function getNewRootNode(core) {
     const branchName = "test" + counter++;
     await project.createBranch(branchName, commitHash);
     const branchHash = await project.getBranchHash(branchName);
@@ -70,7 +66,7 @@ describe("ModelTransformation", function () {
     root,
     fco;
 
-  async function getNodeByName(...names: string[]) {
+  async function getNodeByName(...names) {
     const node = names.reduce(async (getParent, name) => {
       const parent = await getParent;
       const children = await core.loadChildren(parent);
@@ -98,15 +94,18 @@ describe("ModelTransformation", function () {
         "CreateTable",
         "OutputStructure",
       );
+      console.log({ Transformation });
       const outputPattern = await Pattern.fromNode(core, patternNode);
       const elements = outputPattern.getElements();
+      const nodes = elements.filter((e) => e.type.isNode());
       assert.equal(
-        elements.filter((e) => e.type.isNode()).length,
-        1,
-        "Found more than 1 node element in output pattern",
+        nodes.length,
+        2,
+        "Found more than 2 node element in output pattern",
       );
-      const node = elements.find((e) => e.type.isNode());
-      assert(node && node.type instanceof AnyNode);
+      const anyNode = nodes.find((e) => !e.type.isConstant());
+      console.log({ AnyNode });
+      assert(anyNode && anyNode.type instanceof AnyNode);
     });
   });
 
