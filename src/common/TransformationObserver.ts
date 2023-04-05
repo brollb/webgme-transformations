@@ -68,7 +68,10 @@ export default class TransformationObserver {
 
   constructor(
     client: Gme.Client,
-    defaultTransformation: (core: GmeClasses.Core) => Transformation,
+    defaultTransformation: (
+      core: GmeClasses.Core,
+      root: Core.Node,
+    ) => Transformation,
     callback,
   ) {
     this.callback = callback;
@@ -82,8 +85,8 @@ export default class TransformationObserver {
       if (this.state.transformation.isSome()) {
         transformation = this.state.transformation.unwrap();
       } else if (this.transformPath.isNone()) { // use the default if no transformation defined
-        const { core } = await this._getCoreInstance(client);
-        transformation = defaultTransformation(core);
+        const { core, rootNode } = await this._getCoreInstance(client);
+        transformation = defaultTransformation(core, rootNode);
       }
 
       if (transformation) {
