@@ -62,11 +62,11 @@ impl GMENode {
     }
 }
 
+/// Return the reconstructed GME node with ID, `node_id`, with its relationships
+/// to others (the inheritance chain, contained children, and pointers)
+/// recursively.
 fn parse_node(node_id: &str, ref_nodes: &HashMap<String, GMENode>) -> gme::Node {
-    // TODO: we need to parse the nodes first then add any weak references.
-    // This currently will not work as we hope
-    // - parse each node (minimally) into Rc's
-    // - add the children for each parent
+    // construct the nodes without any references to others
     let mut nodes: HashMap<String, Rc<RefCell<gme::Node>>> = ref_nodes
         .values()
         .map(|node| {
