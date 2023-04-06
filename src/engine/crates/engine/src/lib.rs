@@ -825,6 +825,7 @@ mod tests {
 
     #[test]
     fn detect_pointer_const_target() {
+        // Create a pattern for a src pointer to a node /a/d/ptr_tgt
         let mut graph = Graph::new();
         let ptr = graph.add_node(Element::Pointer);
         let ptr_name = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
@@ -837,7 +838,6 @@ mod tests {
             Relation::With(Property::Name, Property::Value),
         );
 
-        // Target should be a node with an attribute set to "target"
         let target_path = String::from("/a/d/ptr_tgt");
         let target_index = graph.add_node(Element::Constant(Constant::Node(NodeId(
             target_path.clone(),

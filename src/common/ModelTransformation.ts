@@ -30,12 +30,12 @@ export default class Transformation {
   }
 
   async apply(activeNode: Core.Node) {
-    const node: GMENode = await GMENode.fromNode(this.core, activeNode);
-    node.setActiveNode();
+    const context = await GMEContext.fromNode(this.core, activeNode);
+
     const createdNodes: CreatedNodeDict = {};
     const newNodes = await this.steps.reduce(async (refDataP, step) => {
       const refData = await refDataP;
-      const matchOutputs = await step.apply(node, activeNode, createdNodes);
+      const matchOutputs = await step.apply(context, activeNode, createdNodes);
       return refData.concat(...matchOutputs);
     }, Promise.resolve([]));
 
@@ -50,10 +50,6 @@ export default class Transformation {
     });
     return roots;
   }
-
-  // TODO: for each assignment:
-  // TODO: create the output pattern using the assignment values
-  // TODO: sort the elements -> (parent) nodes -> attributes/pointers/etc
 
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
     const stepNodes = sortNodeList(core, await core.loadChildren(node), "next");
@@ -110,12 +106,13 @@ class TransformationStep {
   }
 
   async apply(
-    node: GMENode,
+    context: GMEContext,
     gmeNode: Core.Node,
     createdNodes: CreatedNodeDict = {},
+    // TODO: add references?
   ) {
     console.log("---> applying step", this.name);
-    const matches = await this.pattern.matches(node);
+    const matches = await this.pattern.matches(context);
     const outputs = await Promise.all(matches.map(
       (match, index) =>
         this.outputPattern.instantiate(
@@ -159,12 +156,16 @@ export class Pattern {
     this.nodePaths = {};
   }
 
-  async matches(node: GMENode) { // TODO: it might be nice to make this synchronous instead...
+  async matches(context: GMEContext) { // TODO: it might be nice to make this synchronous instead...
     const engine = await getEngine();
     this.ensureCanMatch();
+    console.log(
+      context.references,
+    );
     const assignments: EngineAssignment[] = engine.find_matches(
-      node,
+      context.getActiveNode(),
       this.toEngineJSON(),
+      context.references,
     );
     return assignments.map((a) => mapKeys(a.matches, (k) => this.nodePaths[k]));
   }
@@ -930,26 +931,81 @@ class Endpoint {
   }
 }
 
+export class GMEContext {
+  nodePath: NodePath;
+  references: { [nodeId: NodePath]: GMENode };
+
+  constructor(nodePath: NodePath, references: { [nodeId: NodePath]: GMENode }) {
+    this.nodePath = nodePath;
+    this.references = references;
+  }
+
+  getActiveNode(): GMENode {
+    return this.references[this.nodePath];
+  }
+
+  static async addReferences(
+    core: GmeClasses.Core,
+    node: Core.Node,
+    references: { [nodeId: NodePath]: GMENode },
+  ): Promise<void> {
+    const path = core.getPath(node);
+    if (!references[path]) { // only add if not already captured reference
+      const gmeNode = await GMENode.fromNode(core, node);
+
+      // add self
+      references[gmeNode.id] = gmeNode;
+
+      // add children, gmeNode, pointer targets to references
+      const root = core.getRoot(node);
+      const children = await core.loadChildren(node);
+      const pointerTargets = await Promise.all(
+        Object.values(gmeNode.pointers)
+          .map((path) => core.loadByPath(root, path)),
+      );
+
+      await Promise.all(
+        children.concat(pointerTargets).map(async (node) =>
+          await GMEContext.addReferences(core, node, references)
+        ),
+      );
+    }
+  }
+
+  static async fromNode(
+    core: GmeClasses.Core,
+    node: Core.Node,
+  ): Promise<GMEContext> {
+    const nodePath = core.getPath(node);
+    const references = {};
+    await GMEContext.addReferences(core, node, references);
+
+    const activeNode = references[nodePath];
+    activeNode.setActiveNode();
+    return new GMEContext(nodePath, references);
+  }
+}
+
 /*
  * A representation of the GME node required for the rust pattern engine.
  */
 export class GMENode {
   id: NodePath;
   attributes: { [key: string]: any };
-  children: GMENode[];
-  is_active: boolean;
+  childIds: NodePath[];
+  isActive: boolean;
   pointers: { [key: string]: any };
 
   constructor(path: NodePath, attributes = {}) {
     this.id = path;
     this.attributes = attributes;
-    this.children = [];
+    this.childIds = [];
     this.pointers = {}; // TODO
-    this.is_active = false;
+    this.isActive = false;
   }
 
   setActiveNode(isActive = true) {
-    this.is_active = isActive;
+    this.isActive = isActive;
   }
 
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
@@ -959,9 +1015,7 @@ export class GMENode {
         .map((name) => [name, Primitive.from(core.getAttribute(node, name))]),
     );
     const gmeNode = new GMENode(core.getPath(node), attributes);
-    gmeNode.children = await Promise.all(
-      children.map((child) => GMENode.fromNode(core, child)),
-    );
+    gmeNode.childIds = children.map((child) => core.getPath(child));
     // TODO: Add pointers, etc
     return gmeNode;
   }

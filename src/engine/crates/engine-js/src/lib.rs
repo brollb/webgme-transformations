@@ -1,7 +1,7 @@
 mod utils;
 
 use serde::Deserialize;
-use std::{collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use wasm_bindgen::prelude::*;
 use webgme_pattern_engine::{find_assignments, gme, pattern, Primitive};
 
@@ -34,13 +34,14 @@ extern "C" {
 // closer to what is used in webgme)
 #[wasm_bindgen]
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GMENode {
     id: String,
     is_active: Option<bool>,
     is_meta: Option<bool>,
     attributes: HashMap<String, Primitive>,
     pointers: HashMap<String, String>,
-    children: Vec<GMENode>,
+    child_ids: Vec<String>,
 }
 
 #[wasm_bindgen]
@@ -56,34 +57,73 @@ impl GMENode {
             is_meta: Some(false),
             attributes,
             pointers: HashMap::new(),
-            children: Vec::new(),
+            child_ids: Vec::new(),
         }
     }
 }
 
-impl From<GMENode> for gme::Node {
-    fn from(node: GMENode) -> gme::Node {
-        let attributes: HashMap<gme::AttributeName, gme::Attribute> = node
-            .attributes
-            .into_iter()
-            .map(|(name, val)| (gme::AttributeName(name), gme::Attribute(val)))
-            .collect();
+fn parse_node(node_id: &str, ref_nodes: &HashMap<String, GMENode>) -> gme::Node {
+    // TODO: we need to parse the nodes first then add any weak references.
+    // This currently will not work as we hope
+    // - parse each node (minimally) into Rc's
+    // - add the children for each parent
+    let mut nodes: HashMap<String, Rc<RefCell<gme::Node>>> = ref_nodes
+        .values()
+        .map(|node| {
+            let attributes: HashMap<gme::AttributeName, gme::Attribute> = node
+                .attributes
+                .iter()
+                .map(|(name, val)| {
+                    (
+                        gme::AttributeName(name.to_owned()),
+                        gme::Attribute(val.to_owned()),
+                    )
+                })
+                .collect();
 
-        gme::Node {
-            id: gme::NodeId(node.id),
-            base: None, // TODO: add support for this
-            is_active: node.is_active.unwrap_or(false),
-            is_meta: node.is_meta.unwrap_or(false),
-            attributes,
-            pointers: HashMap::new(), // TODO
-            sets: HashMap::new(),     // TODO
-            children: node
-                .children
-                .into_iter()
-                .map(|child| Rc::new(child.into()))
-                .collect::<Vec<Rc<gme::Node>>>(),
-        }
-    }
+            (
+                node.id.clone(),
+                Rc::new(RefCell::new(gme::Node {
+                    id: gme::NodeId(node.id.clone()),
+                    base: None, // TODO: add support for this
+                    is_active: node.is_active.unwrap_or(false),
+                    is_meta: node.is_meta.unwrap_or(false),
+                    attributes,
+                    pointers: HashMap::new(),
+                    sets: HashMap::new(), // TODO
+                    children: Vec::new(),
+                })),
+            )
+        })
+        .collect();
+
+    // add strong references (children, base)
+    let rc_refcell = Rc::new(RefCell::new(5));
+    let r2 = rc_refcell.clone(); // Rc<RefCell<T>>
+    let im_ref = r2.borrow(); // Ref<T>
+
+    nodes.iter().for_each(|(id, node)| {
+        let child_ids = ref_nodes
+            .get(id)
+            .map(|n| n.child_ids.clone())
+            .unwrap_or_default();
+
+        child_ids
+            .iter()
+            .filter_map(|child_id| nodes.get(child_id))
+            .for_each(|child_ref| {
+                let child = child_ref.clone();
+                // I would like to unwrap the refcell
+                let c2 = child.borrow();
+                // TODO: add a child ref (Rc<gme::Node>) to the list of children
+                node.borrow_mut().children.push(c2);
+            });
+    });
+
+    // add weak refs (pointers)
+    // TODO
+
+    todo!("Add relations between nodes and return the main one")
 }
 
 #[wasm_bindgen]
@@ -92,7 +132,10 @@ pub fn find_matches(node: &JsValue, pattern: &JsValue, referenced_nodes: &JsValu
     let node: GMENode = node.unwrap();
     let pattern = pattern.into_serde::<pattern::Pattern>();
     let pattern = pattern.unwrap();
-    let gme_node: gme::Node = node.into();
+    let ref_nodes = referenced_nodes
+        .into_serde::<HashMap<String, GMENode>>()
+        .unwrap();
+    let gme_node: gme::Node = parse_node(&node.id, &ref_nodes);
     let assignments = find_assignments(gme_node, &pattern);
     JsValue::from_serde(&assignments).unwrap()
 }

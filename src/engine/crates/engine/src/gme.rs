@@ -24,7 +24,7 @@ impl NodeId {
 
     pub fn relids(&self) -> Split<char> {
         let mut relids = self.0.split('/');
-        if self.0.len() > 0 {
+        if !self.0.is_empty() {
             relids.next(); // skip the empty string
         }
         relids
