@@ -52,17 +52,23 @@ pub enum Relation {
 }
 
 impl Relation {
-    // FIXME: we may need to
-    pub fn is_valid(&self, top_node: &gme::Node, src: &Reference, dst: &Reference) -> bool {
+    pub fn is_valid(
+        &self,
+        top_node: &gme::NodeInContext,
+        src: &Reference,
+        dst: &Reference,
+    ) -> bool {
         match (self, src, dst) {
             (Relation::ChildOf, Reference::Node(src_id), Reference::Node(dst_id)) => {
                 let src = gme::find_with_id(top_node, src_id);
-                src.children.iter().any(|child| &child.id == dst_id)
+                let child = src.children().any(|child| &child.data().id == dst_id);
+                dbg!(&src, &child, &src.children().collect::<Vec<_>>());
+                child
             }
             (Relation::Has, Reference::Node(id), Reference::Attribute(node_id, name)) => {
                 if id == node_id {
                     let node = gme::find_with_id(top_node, node_id);
-                    node.attributes.keys().any(|n| n == name)
+                    node.data().attributes.keys().any(|n| n == name)
                 } else {
                     false
                 }
@@ -99,59 +105,68 @@ mod tests {
     use super::*;
     use crate::gme::{AttributeName, NodeId};
     use std::collections::HashMap;
-    use std::rc::Rc;
 
     #[test]
     fn relation_child_of() {
-        let child = gme::Node {
-            id: NodeId::new(String::from("/a/d/child")),
-            base: None,
-            is_active: true,
-            is_meta: false,
-            attributes: HashMap::new(),
-            pointers: HashMap::new(),
-            sets: HashMap::new(),
-            children: Vec::new(),
-        };
-        let child_ref = Reference::Node(child.id.clone());
-        let parent = gme::Node {
-            id: NodeId::new(String::from("/a/d")),
-            base: None,
-            is_active: true,
-            is_meta: false,
-            attributes: HashMap::new(),
-            pointers: HashMap::new(),
-            sets: HashMap::new(),
-            children: vec![Rc::new(child)],
-        };
-        let parent_ref = Reference::Node(parent.id.clone());
+        let child_idx = gme::NodeIndex(1);
+        let child_id = NodeId::new(String::from("/a/d/child"));
+        let child_ref = Reference::Node(child_id.clone());
+        let nodes = vec![
+            gme::Node {
+                id: NodeId::new(String::from("/a/d")),
+                base: None,
+                is_active: true,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: vec![child_idx],
+            },
+            gme::Node {
+                id: child_id,
+                base: None,
+                is_active: true,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: Vec::new(),
+            },
+        ];
+        let parent = gme::NodeInContext::from_vec(nodes).unwrap();
+        let parent_ref = Reference::Node(parent.data().id.clone());
         assert!(Relation::ChildOf.is_valid(&parent, &parent_ref, &child_ref));
     }
 
     #[test]
     fn relation_child_of_fail() {
-        let child = gme::Node {
-            id: NodeId::new(String::from("/a/d/child")),
-            base: None,
-            is_active: true,
-            is_meta: false,
-            attributes: HashMap::new(),
-            pointers: HashMap::new(),
-            sets: HashMap::new(),
-            children: Vec::new(),
-        };
-        let child_ref = Reference::Node(child.id.clone());
-        let parent = gme::Node {
-            id: NodeId::new(String::from("/a/d")),
-            base: None,
-            is_active: true,
-            is_meta: false,
-            attributes: HashMap::new(),
-            pointers: HashMap::new(),
-            sets: HashMap::new(),
-            children: vec![Rc::new(child)],
-        };
-        let parent_ref = Reference::Node(parent.id.clone());
+        let child_idx = gme::NodeIndex(0);
+        let child_id = NodeId::new(String::from("/a/d/child"));
+        let child_ref = Reference::Node(child_id.clone());
+        let nodes = vec![
+            gme::Node {
+                id: child_id,
+                base: None,
+                is_active: true,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: Vec::new(),
+            },
+            gme::Node {
+                id: NodeId::new(String::from("/a/d")),
+                base: None,
+                is_active: true,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: vec![child_idx],
+            },
+        ];
+        let parent = gme::NodeInContext::from_vec(nodes).unwrap();
+        let parent_ref = Reference::Node(parent.data().id.clone());
         assert!(!Relation::ChildOf.is_valid(&parent, &child_ref, &parent_ref));
     }
 
@@ -161,7 +176,7 @@ mod tests {
         let attr = gme::Attribute(Primitive::String(String::from("ChildNode2")));
         let attr_name = AttributeName(String::from("name"));
         attributes.insert(attr_name.clone(), attr);
-        let node = gme::Node {
+        let node: gme::NodeInContext = gme::Node {
             id: NodeId::new(String::from("/a/d")),
             base: None,
             is_active: true,
@@ -170,15 +185,16 @@ mod tests {
             pointers: HashMap::new(),
             sets: HashMap::new(),
             children: Vec::new(),
-        };
-        let node_ref = Reference::Node(node.id.clone());
-        let attr_ref = Reference::Attribute(node.id.clone(), attr_name);
+        }
+        .into();
+        let node_ref = Reference::Node(node.data().id.clone());
+        let attr_ref = Reference::Attribute(node.data().id.clone(), attr_name);
         assert!(Relation::Has.is_valid(&node, &node_ref, &attr_ref));
     }
 
     #[test]
     fn relation_has_fail() {
-        let node = gme::Node {
+        let node: gme::NodeInContext = gme::Node {
             id: NodeId::new(String::from("/a/d")),
             base: None,
             is_active: true,
@@ -187,10 +203,11 @@ mod tests {
             pointers: HashMap::new(),
             sets: HashMap::new(),
             children: Vec::new(),
-        };
-        let node_ref = Reference::Node(node.id.clone());
+        }
+        .into();
+        let node_ref = Reference::Node(node.data().id.clone());
         let attr_name = AttributeName(String::from("name"));
-        let attr_ref = Reference::Attribute(node.id.clone(), attr_name);
+        let attr_ref = Reference::Attribute(node.data().id.clone(), attr_name);
         assert!(!Relation::Has.is_valid(&node, &node_ref, &attr_ref));
     }
 
