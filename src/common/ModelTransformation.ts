@@ -950,30 +950,41 @@ export class GMEContext {
     const index = nodes.length;
     nodes.push(gmeNode);
 
-    // add children
-    const children = await core.loadChildren(node);
-    for (const child of children) {
-      const id = core.getPath(child);
-      const nodeIndex = nodes.findIndex((n) => n.id === id) ||
-        await GMEContext.addNode(core, child, nodes);
+    // some helpers...
+    const root = core.getRoot(node);
+    const getIndex = async (nodePath: string) => {
+      let nodeIndex = nodes.findIndex((n) => n.id === nodePath);
+      if (nodeIndex === -1) {
+        const node = await core.loadByPath(root, nodePath);
+        nodeIndex = await GMEContext.addNode(core, node, nodes);
+      }
 
+      return nodeIndex;
+    };
+
+    // add children
+    const childPaths = core.getChildrenPaths(node);
+    for (const childPath of childPaths) {
+      const nodeIndex = await getIndex(childPath);
       gmeNode.children.push(nodeIndex);
     }
 
     // add pointers
     const pointers = core.getPointerNames(node);
-    const root = core.getRoot(node);
     for (const pointer of pointers) {
       const targetPath = core.getPointerPath(node, pointer);
-      if (!!targetPath) { // FIXME: add support for recording "unset" pointers
-        let nodeIndex = nodes.findIndex((n) => n.id === targetPath);
-        if (nodeIndex === -1) {
-          const target = await core.loadByPath(root, targetPath);
-          nodeIndex = await GMEContext.addNode(core, target, nodes);
-        }
-
+      if (!!targetPath) {
+        const nodeIndex = await getIndex(targetPath);
         gmeNode.pointers[pointer] = nodeIndex;
       }
+    }
+
+    // add set members
+    const setNames = core.getSetNames(node);
+    for (const set of setNames) {
+      const memberPaths = core.getMemberPaths(node, set);
+      const memberIdx = await Promise.all(memberPaths.map(getIndex));
+      gmeNode.sets[set] = memberIdx;
     }
 
     return index;
