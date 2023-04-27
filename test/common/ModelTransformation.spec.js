@@ -4,10 +4,21 @@
 
 const testFixture = require("../globals");
 const assert = require("assert");
-const { ModelTransformation: Transformation, Pattern, AnyNode, GMENode } =
-  require(
-    "../../dist/common/index",
-  );
+const {
+  ModelTransformation: Transformation,
+  Some,
+  Pattern,
+  Property,
+  AnyNode,
+  Constant,
+  Element,
+  Pointer,
+  GMENode,
+  GMEContext,
+  Relation,
+} = require(
+  "../../dist/common/index",
+);
 
 describe("ModelTransformation", function () {
   const _ = testFixture.requirejs("underscore");
@@ -95,7 +106,6 @@ describe("ModelTransformation", function () {
         "CreateTable",
         "OutputStructure",
       );
-      console.log({ Transformation });
       const outputPattern = await Pattern.fromNode(core, patternNode);
       const elements = outputPattern.getElements();
       const nodes = elements.filter((e) => e.type.isNode());
@@ -105,7 +115,6 @@ describe("ModelTransformation", function () {
         "Found more than 2 node element in output pattern",
       );
       const anyNode = nodes.find((e) => !e.type.isConstant());
-      console.log({ AnyNode });
       assert(anyNode && anyNode.type instanceof AnyNode);
     });
   });
@@ -163,6 +172,58 @@ describe("ModelTransformation", function () {
     it("should not create nodes w/ same ID", async function () {
       const uniqNodes = _.uniq(outputNodes, false, (node) => node.id);
       assert.equal(uniqNodes.length, outputNodes.length);
+    });
+  });
+
+  describe("pointer support", function () {
+    it("should be able to match based on pointer", async function () {
+      // Create the pattern
+      const pattern = new Pattern();
+      const node = new Element(new AnyNode());
+      const nodeIdx = pattern.addElement(node, Some("/pattern/e"));
+      const pointer = new Element(new Pointer());
+      const pointerIdx = pattern.addElement(pointer);
+      const test_const = new Element(new Constant("test"));
+      const test_constIdx = pattern.addElement(test_const);
+      const target = new Element(new AnyNode());
+      const targetIdx = pattern.addElement(target, Some("/pattern/t"));
+
+      pattern.addRelation(nodeIdx, pointerIdx, new Relation.Has());
+      pattern.addRelation(
+        pointerIdx,
+        test_constIdx,
+        new Relation.With(Property.Name, Property.Value),
+      );
+      pattern.addRelation(
+        pointerIdx,
+        targetIdx,
+        new Relation.With(Property.Value, Property.Value),
+      );
+
+      // Create a GME context and find matches
+      const expectedIdx = 1;
+      const targetNodeIdx = 2;
+      const otherIdx = 3;
+
+      const parent = new GMENode("/p");
+      const expected = new GMENode("/p/e");
+      const targetNode = new GMENode("/p/t");
+      const other = new GMENode("/p/o");
+
+      const nodes = [parent, expected, targetNode, other];
+
+      parent.children = [expectedIdx, targetNodeIdx, otherIdx];
+      expected.pointers.test = targetNodeIdx;
+
+      const context = new GMEContext(nodes);
+
+      // Check for assignments
+      const assignments = await pattern.matches(context);
+      assert.equal(assignments.length, 1);
+
+      const assgn = assignments.pop();
+      assert.equal(assgn["/pattern/e"].Node, "/p/e");
+      assert.equal(assgn["/pattern/t"].Node, "/p/t");
     });
   });
 });

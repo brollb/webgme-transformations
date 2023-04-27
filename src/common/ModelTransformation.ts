@@ -1,4 +1,5 @@
 import { None, Option, Some } from "oxide.ts";
+export { None, Some } from "oxide.ts";
 
 declare global {
   // Workaround for issue in webgme types
@@ -30,12 +31,12 @@ export default class Transformation {
   }
 
   async apply(activeNode: Core.Node) {
-    const node: GMENode = await GMENode.fromNode(this.core, activeNode);
-    node.setActiveNode();
+    const context = await GMEContext.fromNode(this.core, activeNode);
+
     const createdNodes: CreatedNodeDict = {};
     const newNodes = await this.steps.reduce(async (refDataP, step) => {
       const refData = await refDataP;
-      const matchOutputs = await step.apply(node, activeNode, createdNodes);
+      const matchOutputs = await step.apply(context, activeNode, createdNodes);
       return refData.concat(...matchOutputs);
     }, Promise.resolve([]));
 
@@ -50,10 +51,6 @@ export default class Transformation {
     });
     return roots;
   }
-
-  // TODO: for each assignment:
-  // TODO: create the output pattern using the assignment values
-  // TODO: sort the elements -> (parent) nodes -> attributes/pointers/etc
 
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
     const stepNodes = sortNodeList(core, await core.loadChildren(node), "next");
@@ -110,12 +107,13 @@ class TransformationStep {
   }
 
   async apply(
-    node: GMENode,
+    context: GMEContext,
     gmeNode: Core.Node,
     createdNodes: CreatedNodeDict = {},
+    // TODO: add references?
   ) {
     console.log("---> applying step", this.name);
-    const matches = await this.pattern.matches(node);
+    const matches = await this.pattern.matches(context);
     const outputs = await Promise.all(matches.map(
       (match, index) =>
         this.outputPattern.instantiate(
@@ -159,11 +157,11 @@ export class Pattern {
     this.nodePaths = {};
   }
 
-  async matches(node: GMENode) { // TODO: it might be nice to make this synchronous instead...
+  async matches(context: GMEContext) { // TODO: it might be nice to make this synchronous instead...
     const engine = await getEngine();
     this.ensureCanMatch();
     const assignments: EngineAssignment[] = engine.find_matches(
-      node,
+      context,
       this.toEngineJSON(),
     );
     return assignments.map((a) => mapKeys(a.matches, (k) => this.nodePaths[k]));
@@ -188,7 +186,7 @@ export class Pattern {
     return { graph };
   }
 
-  addElement(node: Element, nodePath: Option<GmeCommon.Path>) {
+  addElement(node: Element, nodePath: Option<GmeCommon.Path> = None): number {
     const index = this.graph.addNode(node);
     nodePath.map((nodePath) => this.nodePaths[index] = nodePath);
     return index;
@@ -272,7 +270,6 @@ export class Pattern {
       ([element, index]) => {
         const node = new JsonNode(nodeIdFor(index));
 
-        console.log("making new node for", element, node);
         if (assignments[element.originPath]) {
           const assignedElement = assignments[element.originPath];
           assert(
@@ -627,7 +624,7 @@ class Graph {
     this.edge_property = "directed";
   }
 
-  addNode(node) {
+  addNode(node): number {
     this.nodes.push(node);
     return this.nodes.length - 1;
   }
@@ -669,7 +666,7 @@ interface ElementType extends EngineSerializable {
   isConstant(): boolean;
 }
 
-class ActiveNode implements ElementType {
+export class ActiveNode implements ElementType {
   isNode(): boolean {
     return true;
   }
@@ -716,7 +713,7 @@ class MatchedNode implements ElementType {
   }
 }
 
-class Attribute implements ElementType {
+export class Attribute implements ElementType {
   isNode(): boolean {
     return false;
   }
@@ -728,7 +725,7 @@ class Attribute implements ElementType {
   }
 }
 
-class Pointer implements ElementType {
+export class Pointer implements ElementType {
   isNode(): boolean {
     return false;
   }
@@ -740,7 +737,7 @@ class Pointer implements ElementType {
   }
 }
 
-class Constant implements ElementType {
+export class Constant implements ElementType {
   value: any;
   constructor(value: any) {
     this.value = value;
@@ -782,7 +779,7 @@ class NodeConstant implements ElementType {
   }
 }
 
-class Element {
+export class Element {
   type: ElementType;
   nodePath: string | undefined;
   originPath: string | undefined;
@@ -798,7 +795,7 @@ interface EngineSerializable {
   toEngineJSON(): any;
 }
 
-namespace Relation {
+export namespace Relation {
   export interface Relation extends EngineSerializable {}
 
   export class Has implements Relation {
@@ -857,7 +854,7 @@ namespace Relation {
   }
 }
 
-enum Property {
+export enum Property {
   Name = "Name",
   Value = "Value",
 }
@@ -930,39 +927,102 @@ class Endpoint {
   }
 }
 
+// TODO: can the index be implicit? Maybe the first one?
+export class GMEContext {
+  private nodes: GMENode[];
+
+  constructor(nodes: GMENode[]) {
+    this.nodes = nodes;
+  }
+
+  getActiveNode(): GMENode {
+    return this.nodes[0];
+  }
+
+  static async addNode(
+    core: GmeClasses.Core,
+    node: Core.Node,
+    nodes: GMENode[],
+  ): Promise<NodeIndex> {
+    const gmeNode = await GMENode.fromNode(core, node);
+
+    // add self
+    const index = nodes.length;
+    nodes.push(gmeNode);
+
+    // add children
+    const children = await core.loadChildren(node);
+    for (const child of children) {
+      const id = core.getPath(child);
+      const nodeIndex = nodes.findIndex((n) => n.id === id) ||
+        await GMEContext.addNode(core, child, nodes);
+
+      gmeNode.children.push(nodeIndex);
+    }
+
+    // add pointers
+    const pointers = core.getPointerNames(node);
+    const root = core.getRoot(node);
+    for (const pointer of pointers) {
+      const targetPath = core.getPointerPath(node, pointer);
+      if (!!targetPath) { // FIXME: add support for recording "unset" pointers
+        let nodeIndex = nodes.findIndex((n) => n.id === targetPath);
+        if (nodeIndex === -1) {
+          const target = await core.loadByPath(root, targetPath);
+          nodeIndex = await GMEContext.addNode(core, target, nodes);
+        }
+
+        gmeNode.pointers[pointer] = nodeIndex;
+      }
+    }
+
+    return index;
+  }
+
+  static async fromNode(
+    core: GmeClasses.Core,
+    node: Core.Node,
+  ): Promise<GMEContext> {
+    // TODO: put the node in a list and store all references to it by index instead
+    const nodes = [];
+    await GMEContext.addNode(core, node, nodes);
+
+    nodes[0].isActive = true;
+    return new GMEContext(nodes);
+  }
+}
+
+type NodeIndex = number;
 /*
  * A representation of the GME node required for the rust pattern engine.
  */
 export class GMENode {
   id: NodePath;
+  children: NodeIndex[];
   attributes: { [key: string]: any };
-  children: GMENode[];
-  is_active: boolean;
-  pointers: { [key: string]: any };
+  pointers: { [name: string]: NodeIndex };
+  sets: { [name: string]: NodeIndex[] };
+  isActive: boolean;
 
   constructor(path: NodePath, attributes = {}) {
     this.id = path;
     this.attributes = attributes;
     this.children = [];
     this.pointers = {}; // TODO
-    this.is_active = false;
+    this.isActive = false;
+    this.sets = {};
   }
 
   setActiveNode(isActive = true) {
-    this.is_active = isActive;
+    this.isActive = isActive;
   }
 
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
-    const children = await core.loadChildren(node);
     const attributes = Object.fromEntries(
       core.getAttributeNames(node)
         .map((name) => [name, Primitive.from(core.getAttribute(node, name))]),
     );
     const gmeNode = new GMENode(core.getPath(node), attributes);
-    gmeNode.children = await Promise.all(
-      children.map((child) => GMENode.fromNode(core, child)),
-    );
-    // TODO: Add pointers, etc
     return gmeNode;
   }
 }
@@ -1044,9 +1104,10 @@ function nodePathContains(parent: NodePath, maybeChild: NodePath): boolean {
 }
 
 function mapKeys<T>(obj: { [key: string]: T }, fn: (k: string) => string) {
-  return Object.fromEntries(
-    Object.entries(obj).map(([k, v]) => [fn(k), v]),
-  );
+  const entries = Object.entries(obj)
+    .map(([k, v]) => [fn(k), v])
+    .filter(([k, _v]) => k !== undefined);
+  return Object.fromEntries(entries);
 }
 
 interface ModelError {

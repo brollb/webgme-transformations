@@ -42,7 +42,7 @@ impl Assignment {
     pub fn is_valid_target(
         &self,
         pattern: &Pattern,
-        top_node: &gme::Node,
+        top_node: &gme::NodeInContext,
         element_idx: NodeIndex,
         gme_ref: &Reference,
     ) -> bool {
@@ -79,35 +79,39 @@ impl Assignment {
                     })
                     .map(|(src_ref, dst_ref)| {
                         let src = match src_ref {
-                            Reference::Node(src_id) => gme::find_with_id(top_node, &src_id),
+                            Reference::Node(src_id) => gme::find_with_id(top_node, src_id),
                             _ => unreachable!(),
                         };
                         let dst_id = match dst_ref {
                             Reference::Node(node_id) => node_id,
                             _ => unreachable!(),
                         };
-                        src.children
-                            .iter()
-                            .find(|child| &child.id == dst_id)
-                            .is_some()
+                        let has_child = src.children().any(|child| &child.data().id == dst_id);
+
+                        has_child
                     })
                     .unwrap_or(true),
 
                 Relation::Has => self
                     .matches
-                    .get(&index)
+                    .get(index)
                     .map(|other_ref| {
                         let (node_ref, attr_ref) = match dir {
                             Direction::Incoming => (other_ref, gme_ref),
                             Direction::Outgoing => (gme_ref, other_ref),
                         };
                         let node = match node_ref {
-                            Reference::Node(node_id) => gme::find_with_id(top_node, &node_id),
+                            Reference::Node(node_id) => gme::find_with_id(top_node, node_id),
                             _ => unreachable!(),
                         };
                         match attr_ref {
                             Reference::Attribute(node_id, attr_name) => {
-                                node_id == &node.id && node.attributes.contains_key(attr_name)
+                                node_id == &node.data().id
+                                    && node.data().attributes.contains_key(attr_name)
+                            }
+                            Reference::Pointer(node_id, ptr_name) => {
+                                node_id == &node.data().id
+                                    && node.data().pointers.contains_key(ptr_name)
                             }
                             _ => unreachable!(),
                         }
@@ -148,7 +152,7 @@ impl Assignment {
 
     fn get_ptr_attr_value(
         &self,
-        top_node: &gme::Node,
+        top_node: &gme::NodeInContext,
         gme_ref: &Reference,
         gme_ref_prop: &Property,
     ) -> Primitive {
@@ -159,7 +163,7 @@ impl Assignment {
             }
             (Reference::Attribute(node_id, attr_name), Property::Value) => {
                 let node = gme::find_with_id(top_node, &node_id);
-                node.attributes.get(&attr_name).unwrap().0.clone()
+                node.data().attributes.get(&attr_name).unwrap().0.clone()
             }
             (Reference::Pointer(_node_id, name), Property::Name) => {
                 Primitive::String(name.0.clone())
@@ -167,13 +171,12 @@ impl Assignment {
             (Reference::Pointer(node_id, name), Property::Value) => {
                 let node = gme::find_with_id(top_node, &node_id);
                 let target = node
-                    .pointers
-                    .get(&name)
-                    .expect("Pointer reference set to invalid pointer.")
-                    .upgrade()
-                    .unwrap();
+                    .pointers()
+                    .find(|(pointer, _target)| pointer == &name)
+                    .map(|(_pointer, target)| target)
+                    .expect("Pointer reference set to invalid pointer.");
 
-                Primitive::String(target.id.0.clone())
+                Primitive::String(target.data().id.0.clone())
             }
             (Reference::Node(node_id), Property::Value) => Primitive::String(node_id.0.clone()), // TODO: add set, etc
             _ => unreachable!("With relation can only be with Attribute GME refs"),

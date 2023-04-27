@@ -1,7 +1,11 @@
 mod utils;
 
+use core::convert::TryFrom;
 use serde::Deserialize;
-use std::{collections::HashMap, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryInto,
+};
 use wasm_bindgen::prelude::*;
 use webgme_pattern_engine::{find_assignments, gme, pattern, Primitive};
 
@@ -34,70 +38,110 @@ extern "C" {
 // closer to what is used in webgme)
 #[wasm_bindgen]
 #[derive(Debug, Deserialize)]
+pub struct GMEContext {
+    nodes: Vec<GMENode>,
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Deserialize)]
+pub struct EmptyContextError;
+
+impl TryFrom<GMEContext> for gme::NodeInContext {
+    type Error = EmptyContextError;
+
+    fn try_from(context: GMEContext) -> Result<Self, Self::Error> {
+        let nodes: Vec<_> = context.nodes.into_iter().map(|node| node.into()).collect();
+        // TODO: should we validate the node index values?
+        gme::NodeInContext::from_vec(nodes).ok_or(EmptyContextError)
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GMENode {
     id: String,
     is_active: Option<bool>,
     is_meta: Option<bool>,
     attributes: HashMap<String, Primitive>,
-    pointers: HashMap<String, String>,
-    children: Vec<GMENode>,
-}
-
-#[wasm_bindgen]
-impl GMENode {
-    #[wasm_bindgen(constructor)]
-    pub fn new(id: String, name: String) -> Self {
-        let attributes: HashMap<_, _> = vec![("name".to_owned(), Primitive::String(name))]
-            .into_iter()
-            .collect();
-        Self {
-            id,
-            is_active: Some(false),
-            is_meta: Some(false),
-            attributes,
-            pointers: HashMap::new(),
-            children: Vec::new(),
-        }
-    }
+    pointers: HashMap<String, usize>,
+    sets: HashMap<String, Vec<usize>>,
+    children: Vec<usize>,
 }
 
 impl From<GMENode> for gme::Node {
-    fn from(node: GMENode) -> gme::Node {
-        let attributes: HashMap<gme::AttributeName, gme::Attribute> = node
+    fn from(node: GMENode) -> Self {
+        let attributes: HashMap<_, _> = node
             .attributes
             .into_iter()
-            .map(|(name, val)| (gme::AttributeName(name), gme::Attribute(val)))
+            .map(|(name, value)| (gme::AttributeName(name), gme::Attribute(value)))
+            .collect();
+        let pointers: HashMap<_, _> = node
+            .pointers
+            .into_iter()
+            .map(|(name, index)| {
+                let pointer = gme::PointerName(name);
+                let node_index = gme::NodeIndex(index);
+                (pointer, node_index)
+            })
+            .collect();
+        let children: Vec<_> = node
+            .children
+            .into_iter()
+            .map(|index| gme::NodeIndex(index))
+            .collect();
+        let sets: HashMap<_, _> = node
+            .sets
+            .into_iter()
+            .map(|(name, idx)| {
+                let indices: HashSet<_> =
+                    idx.into_iter().map(|index| gme::NodeIndex(index)).collect();
+                (gme::SetName(name), indices)
+            })
             .collect();
 
-        gme::Node {
-            id: gme::NodeId(node.id),
-            base: None, // TODO: add support for this
+        Self {
+            id: gme::NodeId::new(node.id),
+            base: pointers
+                .get(&gme::PointerName("base".into()))
+                .map(|v| v.to_owned()),
             is_active: node.is_active.unwrap_or(false),
             is_meta: node.is_meta.unwrap_or(false),
             attributes,
-            pointers: HashMap::new(), // TODO
-            sets: HashMap::new(),     // TODO
-            children: node
-                .children
-                .into_iter()
-                .map(|child| Rc::new(child.into()))
-                .collect::<Vec<Rc<gme::Node>>>(),
+            pointers,
+            sets,
+            children,
         }
     }
 }
 
 #[wasm_bindgen]
-pub fn find_matches(node: &JsValue, pattern: &JsValue, referenced_nodes: &JsValue) -> JsValue {
-    let node = node.into_serde::<GMENode>();
-    let node: GMENode = node.unwrap();
+pub fn find_matches(context: &JsValue, pattern: &JsValue) -> JsValue {
+    utils::set_panic_hook();
+
+    let context = context.into_serde::<GMEContext>();
+    let context: GMEContext = context.unwrap();
+    let context: gme::NodeInContext = context.try_into().unwrap();
+
     let pattern = pattern.into_serde::<pattern::Pattern>();
     let pattern = pattern.unwrap();
-    let gme_node: gme::Node = node.into();
-    let assignments = find_assignments(gme_node, &pattern);
+
+    let assignments = find_assignments(context, &pattern);
     JsValue::from_serde(&assignments).unwrap()
 }
 
 #[wasm_bindgen]
-pub fn test(pattern: &JsValue, node: &JsValue, referenced_nodes: &JsValue) -> JsValue {
-    todo!("Check that there is at least one match given the pattern and node");
+pub fn test(pattern: &JsValue, context: &JsValue) -> JsValue {
+    utils::set_panic_hook();
+
+    // TODO: update this to use iterators and just check for a single match
+    let context = context.into_serde::<GMEContext>();
+    let context: GMEContext = context.unwrap();
+    let context: gme::NodeInContext = context.try_into().unwrap();
+
+    let pattern = pattern.into_serde::<pattern::Pattern>();
+    let pattern = pattern.unwrap();
+
+    let assignments = find_assignments(context, &pattern);
+    JsValue::from_bool(!assignments.is_empty())
 }
