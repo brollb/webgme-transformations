@@ -79,17 +79,14 @@ impl Assignment {
                     })
                     .map(|(src_ref, dst_ref)| {
                         let src = match src_ref {
-                            Reference::Node(src_id) => gme::find_with_id(top_node, &src_id),
+                            Reference::Node(src_id) => gme::find_with_id(top_node, src_id),
                             _ => unreachable!(),
                         };
                         let dst_id = match dst_ref {
                             Reference::Node(node_id) => node_id,
                             _ => unreachable!(),
                         };
-                        let has_child = src
-                            .children()
-                            .find(|child| &child.data().id == dst_id)
-                            .is_some();
+                        let has_child = src.children().any(|child| &child.data().id == dst_id);
 
                         has_child
                     })
@@ -97,14 +94,14 @@ impl Assignment {
 
                 Relation::Has => self
                     .matches
-                    .get(&index)
+                    .get(index)
                     .map(|other_ref| {
                         let (node_ref, attr_ref) = match dir {
                             Direction::Incoming => (other_ref, gme_ref),
                             Direction::Outgoing => (gme_ref, other_ref),
                         };
                         let node = match node_ref {
-                            Reference::Node(node_id) => gme::find_with_id(top_node, &node_id),
+                            Reference::Node(node_id) => gme::find_with_id(top_node, node_id),
                             _ => unreachable!(),
                         };
                         match attr_ref {
