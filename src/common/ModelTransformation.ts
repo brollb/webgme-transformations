@@ -1102,9 +1102,10 @@ function nodePathContains(parent: NodePath, maybeChild: NodePath): boolean {
 }
 
 function mapKeys<T>(obj: { [key: string]: T }, fn: (k: string) => string) {
-  return Object.fromEntries(
-    Object.entries(obj).map(([k, v]) => [fn(k), v]),
-  );
+  const entries = Object.entries(obj)
+    .map(([k, v]) => [fn(k), v])
+    .filter(([k, _v]) => k !== undefined);
+  return Object.fromEntries(entries);
 }
 
 interface ModelError {
