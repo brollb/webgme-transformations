@@ -1,4 +1,5 @@
 import { None, Option, Some } from "oxide.ts";
+export { None, Some } from "oxide.ts";
 
 declare global {
   // Workaround for issue in webgme types
@@ -160,12 +161,11 @@ export class Pattern {
     const engine = await getEngine();
     this.ensureCanMatch();
     console.log(
-      context.references,
+      context,
     );
     const assignments: EngineAssignment[] = engine.find_matches(
-      context.getActiveNode(),
+      context,
       this.toEngineJSON(),
-      context.references,
     );
     return assignments.map((a) => mapKeys(a.matches, (k) => this.nodePaths[k]));
   }
@@ -189,7 +189,7 @@ export class Pattern {
     return { graph };
   }
 
-  addElement(node: Element, nodePath: Option<GmeCommon.Path>) {
+  addElement(node: Element, nodePath: Option<GmeCommon.Path> = None): number {
     const index = this.graph.addNode(node);
     nodePath.map((nodePath) => this.nodePaths[index] = nodePath);
     return index;
@@ -628,7 +628,7 @@ class Graph {
     this.edge_property = "directed";
   }
 
-  addNode(node) {
+  addNode(node): number {
     this.nodes.push(node);
     return this.nodes.length - 1;
   }
@@ -670,7 +670,7 @@ interface ElementType extends EngineSerializable {
   isConstant(): boolean;
 }
 
-class ActiveNode implements ElementType {
+export class ActiveNode implements ElementType {
   isNode(): boolean {
     return true;
   }
@@ -717,7 +717,7 @@ class MatchedNode implements ElementType {
   }
 }
 
-class Attribute implements ElementType {
+export class Attribute implements ElementType {
   isNode(): boolean {
     return false;
   }
@@ -729,7 +729,7 @@ class Attribute implements ElementType {
   }
 }
 
-class Pointer implements ElementType {
+export class Pointer implements ElementType {
   isNode(): boolean {
     return false;
   }
@@ -741,7 +741,7 @@ class Pointer implements ElementType {
   }
 }
 
-class Constant implements ElementType {
+export class Constant implements ElementType {
   value: any;
   constructor(value: any) {
     this.value = value;
@@ -783,7 +783,7 @@ class NodeConstant implements ElementType {
   }
 }
 
-class Element {
+export class Element {
   type: ElementType;
   nodePath: string | undefined;
   originPath: string | undefined;
@@ -799,7 +799,7 @@ interface EngineSerializable {
   toEngineJSON(): any;
 }
 
-namespace Relation {
+export namespace Relation {
   export interface Relation extends EngineSerializable {}
 
   export class Has implements Relation {
@@ -858,7 +858,7 @@ namespace Relation {
   }
 }
 
-enum Property {
+export enum Property {
   Name = "Name",
   Value = "Value",
 }
@@ -931,77 +931,87 @@ class Endpoint {
   }
 }
 
+// TODO: can the index be implicit? Maybe the first one?
 export class GMEContext {
-  nodePath: NodePath;
-  references: { [nodeId: NodePath]: GMENode };
+  private nodes: GMENode[];
 
-  constructor(nodePath: NodePath, references: { [nodeId: NodePath]: GMENode }) {
-    this.nodePath = nodePath;
-    this.references = references;
+  constructor(nodes: GMENode[]) {
+    this.nodes = nodes;
   }
 
   getActiveNode(): GMENode {
-    return this.references[this.nodePath];
+    return this.nodes[0];
   }
 
-  static async addReferences(
+  static async addNode(
     core: GmeClasses.Core,
     node: Core.Node,
-    references: { [nodeId: NodePath]: GMENode },
-  ): Promise<void> {
-    const path = core.getPath(node);
-    if (!references[path]) { // only add if not already captured reference
-      const gmeNode = await GMENode.fromNode(core, node);
+    nodes: GMENode[],
+  ): Promise<NodeIndex> {
+    const gmeNode = await GMENode.fromNode(core, node);
 
-      // add self
-      references[gmeNode.id] = gmeNode;
+    // add self
+    const index = nodes.length;
+    nodes.push(gmeNode);
 
-      // add children, gmeNode, pointer targets to references
-      const root = core.getRoot(node);
-      const children = await core.loadChildren(node);
-      const pointerTargets = await Promise.all(
-        Object.values(gmeNode.pointers)
-          .map((path) => core.loadByPath(root, path)),
-      );
+    // add children
+    const children = await core.loadChildren(node);
+    for (const child of children) {
+      const id = core.getPath(child);
+      const nodeIndex = nodes.findIndex((n) => n.id === id) ||
+        await GMEContext.addNode(core, child, nodes);
 
-      await Promise.all(
-        children.concat(pointerTargets).map(async (node) =>
-          await GMEContext.addReferences(core, node, references)
-        ),
-      );
+      gmeNode.children.push(nodeIndex);
     }
+
+    // add pointers
+    const pointers = core.getPointerNames(node);
+    const root = core.getRoot(node);
+    for (const pointer of pointers) {
+      const targetPath = core.getPointerPath(node, pointer);
+      let nodeIndex = nodes.findIndex((n) => n.id === targetPath);
+      if (!nodeIndex) {
+        const target = await core.loadByPath(root, targetPath);
+        nodeIndex = await GMEContext.addNode(core, target, nodes);
+      }
+
+      gmeNode.pointers[pointer] = nodeIndex;
+    }
+
+    return index;
   }
 
   static async fromNode(
     core: GmeClasses.Core,
     node: Core.Node,
   ): Promise<GMEContext> {
-    const nodePath = core.getPath(node);
-    const references = {};
-    await GMEContext.addReferences(core, node, references);
+    // TODO: put the node in a list and store all references to it by index instead
+    const nodes = [];
+    await GMEContext.addNode(core, node, nodes);
 
-    const activeNode = references[nodePath];
-    activeNode.setActiveNode();
-    return new GMEContext(nodePath, references);
+    return new GMEContext(nodes);
   }
 }
 
+type NodeIndex = number;
 /*
  * A representation of the GME node required for the rust pattern engine.
  */
 export class GMENode {
   id: NodePath;
+  children: NodeIndex[];
   attributes: { [key: string]: any };
-  childIds: NodePath[];
+  pointers: { [name: string]: NodeIndex };
+  sets: { [name: string]: NodeIndex[] };
   isActive: boolean;
-  pointers: { [key: string]: any };
 
   constructor(path: NodePath, attributes = {}) {
     this.id = path;
     this.attributes = attributes;
-    this.childIds = [];
+    this.children = [];
     this.pointers = {}; // TODO
     this.isActive = false;
+    this.sets = {};
   }
 
   setActiveNode(isActive = true) {
@@ -1009,14 +1019,11 @@ export class GMENode {
   }
 
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
-    const children = await core.loadChildren(node);
     const attributes = Object.fromEntries(
       core.getAttributeNames(node)
         .map((name) => [name, Primitive.from(core.getAttribute(node, name))]),
     );
     const gmeNode = new GMENode(core.getPath(node), attributes);
-    gmeNode.childIds = children.map((child) => core.getPath(child));
-    // TODO: Add pointers, etc
     return gmeNode;
   }
 }
