@@ -160,9 +160,6 @@ export class Pattern {
   async matches(context: GMEContext) { // TODO: it might be nice to make this synchronous instead...
     const engine = await getEngine();
     this.ensureCanMatch();
-    console.log(
-      context,
-    );
     const assignments: EngineAssignment[] = engine.find_matches(
       context,
       this.toEngineJSON(),

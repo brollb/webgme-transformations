@@ -6,6 +6,7 @@ const testFixture = require("../globals");
 const assert = require("assert");
 const {
   ModelTransformation: Transformation,
+  Some,
   Pattern,
   Property,
   AnyNode,
@@ -105,7 +106,6 @@ describe("ModelTransformation", function () {
         "CreateTable",
         "OutputStructure",
       );
-      console.log({ Transformation });
       const outputPattern = await Pattern.fromNode(core, patternNode);
       const elements = outputPattern.getElements();
       const nodes = elements.filter((e) => e.type.isNode());
@@ -115,7 +115,6 @@ describe("ModelTransformation", function () {
         "Found more than 2 node element in output pattern",
       );
       const anyNode = nodes.find((e) => !e.type.isConstant());
-      console.log({ AnyNode });
       assert(anyNode && anyNode.type instanceof AnyNode);
     });
   });
@@ -176,18 +175,18 @@ describe("ModelTransformation", function () {
     });
   });
 
-  describe.only("pointer support", function () {
+  describe("pointer support", function () {
     it("should be able to match based on pointer", async function () {
       // Create the pattern
       const pattern = new Pattern();
       const node = new Element(new AnyNode());
-      const nodeIdx = pattern.addElement(node);
+      const nodeIdx = pattern.addElement(node, Some("/pattern/e"));
       const pointer = new Element(new Pointer());
       const pointerIdx = pattern.addElement(pointer);
       const test_const = new Element(new Constant("test"));
       const test_constIdx = pattern.addElement(test_const);
       const target = new Element(new AnyNode());
-      const targetIdx = pattern.addElement(target);
+      const targetIdx = pattern.addElement(target, Some("/pattern/t"));
 
       pattern.addRelation(nodeIdx, pointerIdx, new Relation.Has());
       pattern.addRelation(
@@ -217,11 +216,14 @@ describe("ModelTransformation", function () {
       expected.pointers.test = targetNodeIdx;
 
       const context = new GMEContext(nodes);
-      console.log(expected, JSON.stringify(pattern.toEngineJSON(), null, 2));
 
       // Check for assignments
       const assignments = await pattern.matches(context);
-      console.log(GMEContext, assignments);
+      assert.equal(assignments.length, 1);
+
+      const assgn = assignments.pop();
+      assert.equal(assgn["/pattern/e"].Node, "/p/e");
+      assert.equal(assgn["/pattern/t"].Node, "/p/t");
     });
   });
 });
