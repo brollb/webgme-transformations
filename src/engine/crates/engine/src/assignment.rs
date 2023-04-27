@@ -109,6 +109,10 @@ impl Assignment {
                                 node_id == &node.data().id
                                     && node.data().attributes.contains_key(attr_name)
                             }
+                            Reference::Pointer(node_id, ptr_name) => {
+                                node_id == &node.data().id
+                                    && node.data().pointers.contains_key(ptr_name)
+                            }
                             _ => unreachable!(),
                         }
                     })
