@@ -270,7 +270,6 @@ export class Pattern {
       ([element, index]) => {
         const node = new JsonNode(nodeIdFor(index));
 
-        console.log("making new node for", element, node);
         if (assignments[element.originPath]) {
           const assignedElement = assignments[element.originPath];
           assert(
@@ -966,13 +965,15 @@ export class GMEContext {
     const root = core.getRoot(node);
     for (const pointer of pointers) {
       const targetPath = core.getPointerPath(node, pointer);
-      let nodeIndex = nodes.findIndex((n) => n.id === targetPath);
-      if (!nodeIndex) {
-        const target = await core.loadByPath(root, targetPath);
-        nodeIndex = await GMEContext.addNode(core, target, nodes);
-      }
+      if (!!targetPath) { // FIXME: add support for recording "unset" pointers
+        let nodeIndex = nodes.findIndex((n) => n.id === targetPath);
+        if (nodeIndex === -1) {
+          const target = await core.loadByPath(root, targetPath);
+          nodeIndex = await GMEContext.addNode(core, target, nodes);
+        }
 
-      gmeNode.pointers[pointer] = nodeIndex;
+        gmeNode.pointers[pointer] = nodeIndex;
+      }
     }
 
     return index;
