@@ -25,7 +25,6 @@ describe("ModelTransformation", function () {
   const Core = testFixture.requirejs("common/core/coreQ");
   const gmeConfig = testFixture.getGmeConfig();
   const path = testFixture.path;
-  //const SEED_DIR = path.join(mydir, '..', '..', 'src', 'seeds');
   const SEED_DIR = path.join("src", "seeds");
   const Q = testFixture.Q;
   const logger = testFixture.logger.fork("ModelTransformations");
@@ -124,6 +123,54 @@ describe("ModelTransformation", function () {
       const child = core.createNode({ parent: root, base: fco });
       const node = await GMENode.fromNode(core, child);
       assert(node.attributes.name);
+    });
+  });
+
+  describe("GMEContext", function () {
+    it("should load children", async function () {
+      // Create a few children in some parent
+      const parent = core.createNode({ parent: root, base: fco });
+      core.createNode({ parent, base: fco });
+      core.createNode({ parent, base: fco });
+      core.createNode({ parent, base: fco });
+
+      // Convert to GME context and check it out!
+      const context = await GMEContext.fromNode(core, parent);
+      context.nodes.forEach((node) =>
+        assert(node.children.every((index) => index > -1))
+      );
+    });
+
+    it("should load pointer targets", async function () {
+      // Set a pointer
+      const node = core.createNode({ parent: root, base: fco });
+      const target = core.createNode({ parent: root, base: fco });
+      core.setPointer(node, "test", target);
+
+      // Convert to GME context and check that it has valid indices
+      const context = await GMEContext.fromNode(core, node);
+
+      const activeNode = context.getActiveNode();
+      assert(activeNode.pointers.test);
+      const targets = Object.values(activeNode.pointers);
+      assert(targets.every((index) => index > -1));
+    });
+
+    it("should load set members", async function () {
+      // Add set members
+      const node = core.createNode({ parent: root, base: fco });
+      const member = core.createNode({ parent: root, base: fco });
+      const member2 = core.createNode({ parent: root, base: fco });
+      core.addMember(node, "test", member);
+      core.addMember(node, "test", member2);
+
+      // Convert to GME context and check that it has valid indices
+      const context = await GMEContext.fromNode(core, node);
+      const allMembers = context.nodes.flatMap((node) =>
+        Object.values(node.sets).flat()
+      );
+      assert.equal(allMembers.length, 2);
+      assert(allMembers.every((index) => index > -1));
     });
   });
 
