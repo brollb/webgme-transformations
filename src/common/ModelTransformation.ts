@@ -987,6 +987,7 @@ export class GMEContext {
     const nodes = [];
     await GMEContext.addNode(core, node, nodes);
 
+    nodes[0].isActive = true;
     return new GMEContext(nodes);
   }
 }
