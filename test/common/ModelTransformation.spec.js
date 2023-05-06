@@ -198,6 +198,13 @@ describe("ModelTransformation", function () {
       table.children.every((node) => node.pointers.base === "/O");
     });
 
+    it.only("should generate same outputs using GME context", async function () {
+      const model = await getNodeByName("NodeWithTwoAttributes");
+      const context = await GMEContext.fromNode(core, model);
+      const outputs = await transformation.apply(context);
+      assert.deepEqual(outputs, outputNodes);
+    });
+
     it("should create a single table", async function () {
       assert.equal(outputNodes.length, 1);
     });

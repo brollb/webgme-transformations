@@ -52,6 +52,7 @@ impl TryFrom<GMEContext> for gme::NodeInContext {
     fn try_from(context: GMEContext) -> Result<Self, Self::Error> {
         let nodes: Vec<_> = context.nodes.into_iter().map(|node| node.into()).collect();
         // TODO: should we validate the node index values?
+        // TODO: should we support sending an index, too?
         gme::NodeInContext::from_vec(nodes).ok_or(EmptyContextError)
     }
 }
