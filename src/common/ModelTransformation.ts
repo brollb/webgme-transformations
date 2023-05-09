@@ -30,9 +30,11 @@ export default class Transformation {
     // First, we should just see if we can optimize WJI
   }
 
-  async apply(activeNode: Core.Node) {
-    // TODO: or GMEContext
-    const context = await GMEContext.fromNode(this.core, activeNode);
+  // FIXME: should we add a different method for apply?
+  async apply(nodeOrContext: Core.Node | GMEContext): Promise<JsonNode[]> {
+    const context = nodeOrContext instanceof GMEContext
+      ? nodeOrContext
+      : await GMEContext.fromNode(this.core, nodeOrContext);
 
     const createdNodes: CreatedNodeDict = {};
     const newNodes = await this.steps.reduce(async (refDataP, step) => {
@@ -44,7 +46,7 @@ export default class Transformation {
     return this._toTree(newNodes);
   }
 
-  _toTree(nodes: JsonNode[]) {
+  _toTree(nodes: JsonNode[]): JsonNode[] {
     const [roots, children] = partition(nodes, (node) => !node.parent);
     children.forEach((child) => {
       child.parent.children.push(child);
@@ -90,35 +92,33 @@ function sortNodeList(core: GmeClasses.Core, nodes: Core.Node[], ptr: string) {
 
 class TransformationStep {
   private name: string;
-  private core: GmeClasses.Core;
   private pattern: Pattern;
   private outputPattern: Pattern;
+  private context: GMEContext;
 
   constructor(
     name: string,
-    core: GmeClasses.Core,
     pattern: Pattern,
     outputPattern: Pattern,
   ) {
     this.name = name;
-    this.core = core;
     this.pattern = pattern;
     this.pattern.ensureCanMatch();
     this.outputPattern = outputPattern;
+    this.context = this.pattern.context.union(this.outputPattern.context);
   }
 
   async apply(
     context: GMEContext,
-    //gmeNode: Core.Node, // FIXME: can we remove this one?
     createdNodes: CreatedNodeDict = {},
-    // TODO: add references?
   ) {
     console.log("---> applying step", this.name);
     const matches = await this.pattern.matches(context);
+    const combinedContext = context.union(this.context);
     const outputs = await Promise.all(matches.map(
       (match, index) =>
         this.outputPattern.instantiate(
-          context,
+          combinedContext,
           match,
           createdNodes,
           index.toString(),
@@ -141,20 +141,22 @@ class TransformationStep {
     ]);
 
     const name = core.getAttribute(node, "name").toString();
-    return new TransformationStep(name, core, inputPattern, outputPattern);
+    return new TransformationStep(name, inputPattern, outputPattern);
   }
 }
 
 type NodePath = string;
 export class Pattern {
   private graph: Graph;
+  context: GMEContext;
   private externalRelations: any[];
   private nodePaths: { [key: number]: NodePath };
 
-  constructor() {
+  constructor(context: GMEContext) {
     this.graph = new Graph();
     this.externalRelations = [];
     this.nodePaths = {};
+    this.context = context;
   }
 
   async matches(context: GMEContext) { // TODO: it might be nice to make this synchronous instead...
@@ -321,14 +323,12 @@ export class Pattern {
           index,
           otherEdges.concat(outEdges),
         );
-        // TODO: convert these to use GMEContext
         const name = await this.resolveNodeProperty(
           context,
           assignments,
           newNodesStep,
           ...nameTuple,
         );
-        // TODO: make sure this works for Equal edges, too
         const targetPath = await this.resolveNodeProperty(
           context,
           assignments,
@@ -373,7 +373,7 @@ export class Pattern {
       const elementNode = Pattern.getPatternChild(node);
       const elementType = elementNode.getNode(elementNode.data().pointers.base)
         .data()
-        .attributes.name;
+        .attributes.name?.String;
 
       const elementPath = elementNode.data().id;
       if (elementType === "Constant") {
@@ -412,6 +412,8 @@ export class Pattern {
     }
   }
 
+  // TODO: should we make the pattern from a GME Context instead?
+  //  would this be less efficient?
   static async fromNode(core: GmeClasses.Core, patternNode: Core.Node) {
     const relationType = Object.values(core.getAllMetaNodes(patternNode))
       .find((node) => core.getAttribute(node, "name") === "Relation");
@@ -434,7 +436,8 @@ export class Pattern {
         return 0;
       });
 
-    const pattern = new Pattern();
+    const context = await GMEContext.fromNode(core, patternNode);
+    const pattern = new Pattern(context);
 
     const elementsByNodePath = {}; // mapping from node path to element
     await elementNodes.reduce(async (prev, node) => {
@@ -534,11 +537,14 @@ export class Pattern {
 
     const isPatternType = (n: GMEContext) => {
       const baseType = n.getNode(n.data().pointers.base); // Follow all the way to the meta node?
-      const metaType = baseType.data().attributes.name;
-      return metaType.includes("Pattern") || metaType.includes("Structure");
+      const attr = baseType.data().attributes.name;
+      const typeName = attr?.String;
+      console.log("basetype is", baseType.data(), typeName, attr);
+      return typeName.includes("Pattern") || typeName.includes("Structure");
     };
 
     while (child && !isPatternType(child.getParent())) {
+      console.log("getting pattern child", child.data());
       child = child.getParent();
     }
     return child;
@@ -931,7 +937,7 @@ class Endpoint {
 // TODO: can the index be implicit? Maybe the first one?
 // Should I make this more full-fledged? Like the rust version?
 export class GMEContext implements EngineSerializable {
-  private nodes: GMENode[];
+  nodes: GMENode[];
   private index: NodeIndex;
   private parentDict?: { [key: NodeIndex]: NodeIndex };
   // TODO:
@@ -978,6 +984,14 @@ export class GMEContext implements EngineSerializable {
   toEngineJSON(): any {
     assert(this.index === 0);
     return { nodes: this.nodes };
+  }
+
+  union(otherContext: GMEContext) {
+    const newNodes = otherContext.nodes.map((node) =>
+      node.shift(this.nodes.length)
+    );
+    const nodes = this.nodes.concat(newNodes);
+    return new GMEContext(nodes, this.index);
   }
 
   static async addNode(
@@ -1067,6 +1081,21 @@ export class GMENode {
 
   setActiveNode(isActive = true) {
     this.isActive = isActive;
+  }
+
+  shift(amt: number): GMENode {
+    const copy = new GMENode(this.id, this.attributes);
+    copy.children = this.children.map((index) => index + amt);
+    copy.pointers = mapValues(
+      this.pointers,
+      (index) => index + amt,
+    );
+    copy.sets = mapValues(
+      this.sets,
+      (indices) => indices.map((idx) => idx + amt),
+    );
+    copy.isActive = this.isActive;
+    return copy;
   }
 
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
@@ -1235,4 +1264,11 @@ class JsonNode {
     this.pointers = {};
     this.children = [];
   }
+}
+
+function mapValues<T, O>(
+  obj: { [key: string]: T },
+  fn: (i: T) => O,
+): { [key: string]: O } {
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, fn(v)]));
 }
