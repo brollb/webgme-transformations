@@ -539,12 +539,10 @@ export class Pattern {
       const baseType = n.getNode(n.data().pointers.base); // Follow all the way to the meta node?
       const attr = baseType.data().attributes.name;
       const typeName = attr?.String;
-      console.log("basetype is", baseType.data(), typeName, attr);
       return typeName.includes("Pattern") || typeName.includes("Structure");
     };
 
     while (child && !isPatternType(child.getParent())) {
-      console.log("getting pattern child", child.data());
       child = child.getParent();
     }
     return child;
