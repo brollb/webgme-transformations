@@ -172,6 +172,29 @@ describe("ModelTransformation", function () {
       assert.equal(allMembers.length, 2);
       assert(allMembers.every((index) => index > -1));
     });
+
+    describe("union", function () {
+      it.only("should not duplicate shared nodes", async function () {
+        // Set a pointer
+        const n1 = core.createNode({ parent: root, base: fco });
+        const n2 = core.createNode({ parent: root, base: fco });
+
+        // Convert to GME context and check that it has valid indices
+        const c1 = await GMEContext.fromNode(core, n1);
+        const c2 = await GMEContext.fromNode(core, n2);
+
+        assert(c1.nodes.length > 1);
+        assert.equal(c1.nodes.length, c2.nodes.length);
+
+        const combined = c1.union(c2);
+
+        // resolve fco to same node index
+        const ndata1 = combined.data();
+        const ndata2 = combined.findNode((node) => node.id === c2.data().id)
+          .data();
+        assert.equal(ndata1.pointers.base, ndata2.pointers.base);
+      });
+    });
   });
 
   describe("simple table example", function () {

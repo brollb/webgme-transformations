@@ -864,7 +864,7 @@ export enum Property {
   Value = "Value",
 }
 
-namespace Primitive {
+export namespace Primitive {
   export interface Primitive {}
 
   class String implements Primitive {
@@ -985,11 +985,55 @@ export class GMEContext implements EngineSerializable {
   }
 
   union(otherContext: GMEContext) {
-    const newNodes = otherContext.nodes.map((node) =>
-      node.shift(this.nodes.length)
-    );
-    const nodes = this.nodes.concat(newNodes);
+    // Create a context that contains all nodes in each
+    const nodes = this.nodes.slice();
+
+    // add the new nodes from otherContext to this list of nodes
+    const newNodes = otherContext.nodes.filter((node) =>
+      !nodes.find((existing) => existing.id === node.id)
+    ).map((node) => node.clone());
+
+    // update references for new nodes
+    newNodes.forEach((node) => {
+      node.updateReferences((idx) => {
+        const ref = otherContext.getNode(idx);
+        let nodeIdx = nodes.findIndex((node) => node.id === ref.data().id);
+        if (nodeIdx === -1) {
+          const relIndex = newNodes.indexOf(ref.data());
+          nodeIdx = nodes.length + relIndex;
+        }
+        return nodeIdx;
+      });
+    });
+
+    nodes.push(...newNodes);
     return new GMEContext(nodes, this.index);
+  }
+
+  validate() {
+    const maxIndex = this.nodes.length - 1;
+    this.nodes.forEach((node) => {
+      const invalidChild = node.children.find((index) => index > maxIndex);
+      if (invalidChild) {
+        throw new InvalidChildError(node, invalidChild, maxIndex);
+      }
+
+      const invalidPtr = Object.entries(node.pointers).find(([_name, index]) =>
+        index > maxIndex
+      );
+      if (invalidPtr) {
+        throw new InvalidPointerError(node, ...invalidPtr, maxIndex);
+      }
+
+      const invalidSet = Object.entries(node.sets).find(([_name, idx]) =>
+        idx.some((index) => index > maxIndex)
+      );
+      if (invalidSet) {
+        const [name, members] = invalidSet;
+        const memberIndex = members.find((idx) => idx > maxIndex);
+        throw new InvalidSetError(node, name, memberIndex, maxIndex);
+      }
+    });
   }
 
   static async addNode(
@@ -1081,16 +1125,24 @@ export class GMENode {
     this.isActive = isActive;
   }
 
-  shift(amt: number): GMENode {
-    const copy = new GMENode(this.id, this.attributes);
-    copy.children = this.children.map((index) => index + amt);
-    copy.pointers = mapValues(
+  updateReferences(fn: (idx: NodeIndex) => NodeIndex): void {
+    this.children = this.children.map(fn);
+    this.pointers = mapValues(
       this.pointers,
-      (index) => index + amt,
+      fn,
     );
-    copy.sets = mapValues(
+    this.sets = mapValues(
       this.sets,
-      (indices) => indices.map((idx) => idx + amt),
+      (indices) => indices.map(fn),
+    );
+  }
+
+  clone(): GMENode {
+    const copy = new GMENode(this.id, this.attributes);
+    copy.children = this.children.slice();
+    copy.pointers = clone(this.pointers);
+    copy.sets = clone(
+      this.sets,
     );
     copy.isActive = this.isActive;
     return copy;
@@ -1269,4 +1321,52 @@ function mapValues<T, O>(
   fn: (i: T) => O,
 ): { [key: string]: O } {
   return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, fn(v)]));
+}
+
+export class ValidationError extends Error {}
+
+class InvalidIndexError extends ValidationError {
+  constructor(
+    node: GMENode,
+    name: string,
+    childIndex: NodeIndex,
+    maxIndex: NodeIndex,
+  ) {
+    const msg = `GMENode has invalid child index (max): ${childIndex}\n${
+      JSON.stringify(node, null, 2)
+    }`;
+    super(msg);
+  }
+}
+
+export class InvalidChildError extends InvalidIndexError {
+  constructor(node: GMENode, childIndex: NodeIndex, maxIndex: NodeIndex) {
+    super(node, "child", childIndex, maxIndex);
+  }
+}
+
+export class InvalidPointerError extends InvalidIndexError {
+  constructor(
+    node: GMENode,
+    pointer: string,
+    target: NodeIndex,
+    maxIndex: NodeIndex,
+  ) {
+    super(node, `pointer (${pointer})`, target, maxIndex);
+  }
+}
+
+export class InvalidSetError extends InvalidIndexError {
+  constructor(
+    node: GMENode,
+    set: string,
+    target: NodeIndex,
+    maxIndex: NodeIndex,
+  ) {
+    super(node, `set (${set})`, target, maxIndex);
+  }
+}
+
+function clone<T>(primitive: T): T {
+  return JSON.parse(JSON.stringify(primitive));
 }

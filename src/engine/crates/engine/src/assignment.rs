@@ -162,19 +162,24 @@ impl Assignment {
                 Primitive::String(attr.0.clone())
             }
             (Reference::Attribute(node_id, attr_name), Property::Value) => {
-                let node = gme::find_with_id(top_node, &node_id);
-                node.data().attributes.get(&attr_name).unwrap().0.clone()
+                let node = gme::find_with_id(top_node, node_id);
+                node.data().attributes.get(attr_name).unwrap().0.clone()
             }
             (Reference::Pointer(_node_id, name), Property::Name) => {
                 Primitive::String(name.0.clone())
             }
             (Reference::Pointer(node_id, name), Property::Value) => {
-                let node = gme::find_with_id(top_node, &node_id);
+                let node = gme::find_with_id(top_node, node_id);
                 let target = node
                     .pointers()
                     .find(|(pointer, _target)| pointer == &name)
                     .map(|(_pointer, target)| target)
-                    .expect("Pointer reference set to invalid pointer.");
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Pointer reference set to invalid pointer: {:?} {:?}",
+                            &name, node_id
+                        )
+                    });
 
                 Primitive::String(target.data().id.0.clone())
             }
