@@ -174,7 +174,7 @@ describe("ModelTransformation", function () {
     });
 
     describe("union", function () {
-      it.only("should not duplicate shared nodes", async function () {
+      it("should not duplicate shared nodes", async function () {
         // Set a pointer
         const n1 = core.createNode({ parent: root, base: fco });
         const n2 = core.createNode({ parent: root, base: fco });

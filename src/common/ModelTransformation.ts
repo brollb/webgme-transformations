@@ -999,7 +999,11 @@ export class GMEContext implements EngineSerializable {
         const ref = otherContext.getNode(idx);
         let nodeIdx = nodes.findIndex((node) => node.id === ref.data().id);
         if (nodeIdx === -1) {
-          const relIndex = newNodes.indexOf(ref.data());
+          const relIndex = newNodes.findIndex((n) => n.id === ref.data().id);
+          assert(
+            relIndex > -1,
+            new Error("Could not find referenced node in other context."),
+          );
           nodeIdx = nodes.length + relIndex;
         }
         return nodeIdx;
