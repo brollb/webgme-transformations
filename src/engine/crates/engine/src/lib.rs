@@ -1032,6 +1032,95 @@ mod tests {
         }
     }
 
+    #[test]
+    fn detect_pointer_origin_const_target() {
+        // Create a pattern for a node (ie, the origin) with a "test" pointer to another node
+        let mut graph = Graph::new();
+        let origin = graph.add_node(Element::Node(Node::AnyNode));
+        let ptr = graph.add_node(Element::Pointer);
+        let ptr_name = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
+            "test".into(),
+        ))));
+        let target_path = String::from("/p/t");
+        let target = graph.add_node(Element::Constant(Constant::Node(NodeId(target_path))));
+
+        graph.add_edge(
+            ptr,
+            ptr_name,
+            Relation::With(Property::Name, Property::Value),
+        );
+        graph.add_edge(origin, ptr, Relation::Has);
+        graph.add_edge(
+            ptr,
+            target,
+            Relation::With(Property::Value, Property::Value),
+        );
+        let pattern = Pattern::new(graph);
+
+        // Create a GME context
+        let origin_idx = gme::NodeIndex(1);
+        let target_idx = gme::NodeIndex(2);
+        let other_idx = gme::NodeIndex(3);
+        let origin_pointers: HashMap<_, _> =
+            vec![(PointerName(String::from("test")), target_idx.clone())]
+                .into_iter()
+                .collect();
+        let nodes = vec![
+            gme::Node {
+                id: NodeId::new(String::from("/p")),
+                base: None,
+                is_active: true,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: vec![origin_idx, target_idx, other_idx],
+            },
+            gme::Node {
+                id: NodeId::new(String::from("/p/e")),
+                base: None,
+                is_active: false,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: origin_pointers,
+                sets: HashMap::new(),
+                children: Vec::new(),
+            },
+            gme::Node {
+                id: NodeId::new(String::from("/p/t")),
+                base: None,
+                is_active: false,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: Vec::new(),
+            },
+            gme::Node {
+                id: NodeId::new(String::from("/p/o")),
+                base: None,
+                is_active: false,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: Vec::new(),
+            },
+        ];
+
+        let gme_node = gme::NodeInContext::from_vec(nodes).unwrap();
+        let assignments = find_assignments(gme_node, &pattern);
+        assert_eq!(assignments.len(), 1);
+
+        let assgn = assignments.first().unwrap();
+        let origin_node = assgn.matches.get(&origin).unwrap();
+        if let Reference::Node(NodeId(node_id)) = origin_node {
+            assert_eq!(node_id, &"/p/e".to_owned());
+        } else {
+            panic!("Assigned non-node reference to pointer origin");
+        }
+    }
+
     // #[test]
     // #[ignore]
     // fn detect_pointer_exists() {
