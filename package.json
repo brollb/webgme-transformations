@@ -1,5 +1,7 @@
 {
   "name": "webgme-transformations",
+  "main": "./dist/common/index.js",
+  "types": "./dist/common/index.d.ts",
   "scripts": {
     "build": "npx rollup -c rollup.config.mjs",
     "start": "node app.cjs",
