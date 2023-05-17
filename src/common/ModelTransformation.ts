@@ -1,10 +1,6 @@
 import { None, Option, Some } from "oxide.ts";
 export { None, Some } from "oxide.ts";
 
-declare global {
-  // Workaround for issue in webgme types
-  type GLbyte = number;
-}
 //@ts-ignore
 import type from "webgme";
 
