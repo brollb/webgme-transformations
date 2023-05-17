@@ -1305,9 +1305,9 @@ interface SetRef {
 type CreatedNodeDict = { [nodePath: NodePath]: JsonNode };
 
 // FIXME: we should probably swap to WJI instead...
-class JsonNode {
+export class JsonNode {
   id: string;
-  attributes: { [key: string]: string }; // FIXME: better value type
+  attributes: { [key: string]: Primitive.Primitive };
   pointers: { [key: string]: string };
   children: JsonNode[];
   parent: JsonNode | undefined;
