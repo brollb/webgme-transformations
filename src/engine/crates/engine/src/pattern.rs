@@ -60,14 +60,13 @@ impl Relation {
     ) -> bool {
         match (self, src, dst) {
             (Relation::ChildOf, Reference::Node(src_id), Reference::Node(dst_id)) => {
-                let src = gme::find_with_id(top_node, src_id);
+                let src = top_node.find_with_id(src_id);
                 let child = src.children().any(|child| &child.data().id == dst_id);
-                dbg!(&src, &child, &src.children().collect::<Vec<_>>());
                 child
             }
             (Relation::Has, Reference::Node(id), Reference::Attribute(node_id, name)) => {
                 if id == node_id {
-                    let node = gme::find_with_id(top_node, node_id);
+                    let node = top_node.find_with_id(node_id);
                     node.data().attributes.keys().any(|n| n == name)
                 } else {
                     false

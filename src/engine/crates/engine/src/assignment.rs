@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 use crate::core::Primitive;
 use crate::gme;
@@ -9,7 +10,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Hash)]
 pub enum Reference {
     Node(NodeId),
     Attribute(NodeId, AttributeName),
@@ -17,7 +18,7 @@ pub enum Reference {
     Set(NodeId, SetName),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Eq)]
 pub struct Assignment {
     pub matches: HashMap<NodeIndex, Reference>,
 }
@@ -27,6 +28,12 @@ impl Assignment {
         Assignment {
             matches: HashMap::new(),
         }
+    }
+
+    fn sorted_entries(&self) -> Vec<(&NodeIndex, &Reference)> {
+        let mut entries: Vec<_> = self.matches.iter().to_owned().collect();
+        entries.sort_unstable_by_key(|(k, v)| k.clone());
+        entries
     }
 
     pub fn with(&self, element: NodeIndex, target: Reference) -> Self {
@@ -79,7 +86,7 @@ impl Assignment {
                     })
                     .map(|(src_ref, dst_ref)| {
                         let src = match src_ref {
-                            Reference::Node(src_id) => gme::find_with_id(top_node, src_id),
+                            Reference::Node(src_id) => top_node.find_with_id(src_id),
                             _ => unreachable!(),
                         };
                         let dst_id = match dst_ref {
@@ -96,14 +103,16 @@ impl Assignment {
                     .matches
                     .get(index)
                     .map(|other_ref| {
+                        println!("=== found Has relation");
                         let (node_ref, attr_ref) = match dir {
                             Direction::Incoming => (other_ref, gme_ref),
                             Direction::Outgoing => (gme_ref, other_ref),
                         };
                         let node = match node_ref {
-                            Reference::Node(node_id) => gme::find_with_id(top_node, node_id),
+                            Reference::Node(node_id) => top_node.find_with_id(node_id),
                             _ => unreachable!(),
                         };
+                        println!("=== {:?}", node.data());
                         match attr_ref {
                             Reference::Attribute(node_id, attr_name) => {
                                 node_id == &node.data().id
@@ -156,20 +165,31 @@ impl Assignment {
         gme_ref: &Reference,
         gme_ref_prop: &Property,
     ) -> Primitive {
-        println!("{:?}", gme_ref);
+        println!(
+            "---> {:?} {:?} {:?}",
+            &top_node.data().id,
+            gme_ref,
+            gme_ref_prop
+        );
         match (gme_ref, gme_ref_prop) {
             (Reference::Attribute(_node_id, attr), Property::Name) => {
                 Primitive::String(attr.0.clone())
             }
             (Reference::Attribute(node_id, attr_name), Property::Value) => {
-                let node = gme::find_with_id(top_node, node_id);
+                let node = top_node.find_with_id(node_id);
                 node.data().attributes.get(attr_name).unwrap().0.clone()
             }
             (Reference::Pointer(_node_id, name), Property::Name) => {
                 Primitive::String(name.0.clone())
             }
             (Reference::Pointer(node_id, name), Property::Value) => {
-                let node = gme::find_with_id(top_node, node_id);
+                let node = top_node.find_with_id(node_id);
+                println!(
+                    "find {:?} from {:?}: {:?}",
+                    node_id,
+                    &top_node.data().id,
+                    node.data().id
+                );
                 let target = node
                     .pointers()
                     .find(|(pointer, _target)| pointer == &name)
@@ -192,5 +212,26 @@ impl Assignment {
 impl Default for Assignment {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Hash for Assignment {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // hash the sorted keys and the values in order
+        self.sorted_entries().into_iter().for_each(|(k, v)| {
+            k.hash(state);
+            v.hash(state);
+        });
+    }
+}
+
+impl PartialEq for Assignment {
+    fn eq(&self, other: &Self) -> bool {
+        self.sorted_entries()
+            .into_iter()
+            .zip(other.sorted_entries().into_iter())
+            .fold(true, |still_eq, ((k, v), (other_k, other_v))| {
+                still_eq && k == other_k && v == other_v
+            })
     }
 }
