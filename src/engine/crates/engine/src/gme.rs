@@ -88,8 +88,33 @@ impl NodeInContext {
     }
 
     fn resolve(&self, index: NodeIndex) -> NodeInContext {
-        dbg!(&index);
         NodeInContext::new(index, self.nodes.clone())
+    }
+
+    pub(crate) fn find_with_id(&self, id: &NodeId) -> NodeInContext {
+        self.nodes
+            .iter()
+            .position(|n| id.0.starts_with(&n.id.0))
+            .map(|i| self.resolve(NodeIndex(i)))
+            .map(|parent| {
+                let node = if &parent.data().id == id {
+                    parent
+                } else {
+                    let depth = parent.data().id.relids().count();
+                    let relid = id.relids().skip(depth);
+                    parent.load_by_path(relid)
+                };
+                node
+            })
+            .unwrap_or_else(|| panic!("Could not find node with ID: {:?}", id))
+    }
+
+    fn load_by_path<'a>(&self, rel_id: impl Iterator<Item = &'a str>) -> NodeInContext {
+        rel_id.fold(self.clone(), |node, rel_id| {
+            node.children()
+                .find(|child| child.data().id.relid() == rel_id)
+                .expect("Could not find child")
+        })
     }
 
     pub(crate) fn children<'a>(&'a self) -> impl Iterator<Item = NodeInContext> + 'a {
@@ -99,13 +124,19 @@ impl NodeInContext {
             .map(|idx| self.resolve(idx.clone()))
     }
 
-    pub(crate) fn descendents<'a>(&'a self) -> Box<dyn Iterator<Item = NodeInContext> + 'a> {
-        Box::new(self.children().flat_map(|c| {
-            // FIXME: this is likely not terribly performant...
-            let desc: Vec<_> = c.descendents().collect();
-            std::iter::once(c).chain(desc.into_iter())
-        }))
+    pub(crate) fn all_nodes<'a>(&'a self) -> impl Iterator<Item = NodeInContext> + 'a {
+        (0..self.nodes.len())
+            .map(|index| NodeIndex(index))
+            .map(|idx| self.resolve(idx))
+        // Box::new(self.children().flat_map(|c| {
+        //     // FIXME: this is likely not terribly performant...
+        //     let desc: Vec<_> = c.all_nodes().collect();
+        //     std::iter::once(c).chain(desc.into_iter())
+        // }))
     }
+
+    // pub(crate) fn all_nodes<'a>(&'a self) -> Box<dyn Iterator<Item = NodeInContext> + 'a> {
+    // }
 
     pub(crate) fn pointers<'a>(
         &'a self,
@@ -140,15 +171,3 @@ impl Eq for NodeInContext {}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Attribute(pub Primitive);
-
-pub(crate) fn find_with_id(top_node: &NodeInContext, node_id: &NodeId) -> NodeInContext {
-    let depth = top_node.data().id.relids().count();
-    node_id
-        .relids()
-        .skip(depth)
-        .fold(top_node.clone(), |node, relid| {
-            node.children()
-                .find(|child| child.data().id.relid() == relid)
-                .expect("Could not find child")
-        })
-}

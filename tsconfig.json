@@ -1,8 +1,9 @@
 {
   "compilerOptions": {
+    "declaration": true,
     "target": "es2020",
     "moduleResolution": "node",
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/*.ts"]
 }

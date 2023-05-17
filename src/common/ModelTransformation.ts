@@ -1,10 +1,6 @@
 import { None, Option, Some } from "oxide.ts";
 export { None, Some } from "oxide.ts";
 
-declare global {
-  // Workaround for issue in webgme types
-  type GLbyte = number;
-}
 //@ts-ignore
 import type from "webgme";
 
@@ -30,20 +26,23 @@ export default class Transformation {
     // First, we should just see if we can optimize WJI
   }
 
-  async apply(activeNode: Core.Node) {
-    const context = await GMEContext.fromNode(this.core, activeNode);
+  // FIXME: should we add a different method for apply?
+  async apply(nodeOrContext: Core.Node | GMEContext): Promise<JsonNode[]> {
+    const context = nodeOrContext instanceof GMEContext
+      ? nodeOrContext
+      : await GMEContext.fromNode(this.core, nodeOrContext);
 
     const createdNodes: CreatedNodeDict = {};
     const newNodes = await this.steps.reduce(async (refDataP, step) => {
       const refData = await refDataP;
-      const matchOutputs = await step.apply(context, activeNode, createdNodes);
+      const matchOutputs = await step.apply(context, createdNodes);
       return refData.concat(...matchOutputs);
     }, Promise.resolve([]));
 
     return this._toTree(newNodes);
   }
 
-  _toTree(nodes: JsonNode[]) {
+  _toTree(nodes: JsonNode[]): JsonNode[] {
     const [roots, children] = partition(nodes, (node) => !node.parent);
     children.forEach((child) => {
       child.parent.children.push(child);
@@ -89,36 +88,33 @@ function sortNodeList(core: GmeClasses.Core, nodes: Core.Node[], ptr: string) {
 
 class TransformationStep {
   private name: string;
-  private core: GmeClasses.Core;
   private pattern: Pattern;
   private outputPattern: Pattern;
+  private context: GMEContext;
 
   constructor(
     name: string,
-    core: GmeClasses.Core,
     pattern: Pattern,
     outputPattern: Pattern,
   ) {
     this.name = name;
-    this.core = core;
     this.pattern = pattern;
     this.pattern.ensureCanMatch();
     this.outputPattern = outputPattern;
+    this.context = this.pattern.context.union(this.outputPattern.context);
   }
 
   async apply(
     context: GMEContext,
-    gmeNode: Core.Node,
     createdNodes: CreatedNodeDict = {},
-    // TODO: add references?
   ) {
     console.log("---> applying step", this.name);
     const matches = await this.pattern.matches(context);
+    const combinedContext = context.union(this.context);
     const outputs = await Promise.all(matches.map(
       (match, index) =>
         this.outputPattern.instantiate(
-          this.core,
-          gmeNode,
+          combinedContext,
           match,
           createdNodes,
           index.toString(),
@@ -141,27 +137,29 @@ class TransformationStep {
     ]);
 
     const name = core.getAttribute(node, "name").toString();
-    return new TransformationStep(name, core, inputPattern, outputPattern);
+    return new TransformationStep(name, inputPattern, outputPattern);
   }
 }
 
 type NodePath = string;
 export class Pattern {
   private graph: Graph;
+  context: GMEContext;
   private externalRelations: any[];
   private nodePaths: { [key: number]: NodePath };
 
-  constructor() {
+  constructor(context: GMEContext) {
     this.graph = new Graph();
     this.externalRelations = [];
     this.nodePaths = {};
+    this.context = context;
   }
 
   async matches(context: GMEContext) { // TODO: it might be nice to make this synchronous instead...
     const engine = await getEngine();
     this.ensureCanMatch();
     const assignments: EngineAssignment[] = engine.find_matches(
-      context,
+      context.toEngineJSON(),
       this.toEngineJSON(),
     );
     return assignments.map((a) => mapKeys(a.matches, (k) => this.nodePaths[k]));
@@ -226,8 +224,7 @@ export class Pattern {
   }
 
   async instantiate(
-    core: GmeClasses.Core,
-    node: Core.Node,
+    context: GMEContext,
     assignments: EngineMatches,
     createdNodes: CreatedNodeDict,
     idPrefix = "node",
@@ -322,18 +319,14 @@ export class Pattern {
           index,
           otherEdges.concat(outEdges),
         );
-        const rootNode = core.getRoot(node);
         const name = await this.resolveNodeProperty(
-          core,
-          rootNode,
+          context,
           assignments,
           newNodesStep,
           ...nameTuple,
         );
-        // TODO: make sure this works for Equal edges, too
         const targetPath = await this.resolveNodeProperty(
-          core,
-          rootNode,
+          context,
           assignments,
           newNodesStep,
           ...valueTuple,
@@ -364,8 +357,7 @@ export class Pattern {
   }
 
   async resolveNodeProperty(
-    core: GmeClasses.Core,
-    rootNode: Core.Node,
+    context: GMEContext,
     assignments: EngineMatches,
     newNodesStep: CreatedNodeDict, // nodes created for elements in the output pattern
     indexOrNodePath: number | NodePath,
@@ -373,15 +365,15 @@ export class Pattern {
   ) {
     const isNodePath = typeof indexOrNodePath === "string";
     if (isNodePath) { // FIXME: does this only happen if it is in the input pattern?
-      const node = await core.loadByPath(rootNode, indexOrNodePath);
-      const elementNode = Pattern.getPatternChild(core, node);
-      const elementType = core.getAttribute(
-        core.getBaseType(elementNode),
-        "name",
-      ).toString();
-      const elementPath = core.getPath(elementNode);
+      const node = context.loadByPath(indexOrNodePath);
+      const elementNode = Pattern.getPatternChild(node);
+      const elementType = elementNode.getNode(elementNode.data().pointers.base)
+        .data()
+        .attributes.name?.String;
+
+      const elementPath = elementNode.data().id;
       if (elementType === "Constant") {
-        return core.getAttribute(elementNode, "value");
+        return elementNode.data().attributes.value;
       } else if (elementType.includes("Node")) {
         return assignments[elementPath].Node; // FIXME: I believe this is incorrect
       } else if (elementType === "Attribute") {
@@ -389,8 +381,8 @@ export class Pattern {
         if (property === Property.Name) {
           return attrName;
         } else {
-          const targetNode = await core.loadByPath(rootNode, nodeId);
-          return core.getAttribute(targetNode, attrName);
+          const targetNode = context.loadByPath(nodeId);
+          return targetNode.data().attributes[attrName];
         }
       } else {
         // TODO
@@ -416,6 +408,8 @@ export class Pattern {
     }
   }
 
+  // TODO: should we make the pattern from a GME Context instead?
+  //  would this be less efficient?
   static async fromNode(core: GmeClasses.Core, patternNode: Core.Node) {
     const relationType = Object.values(core.getAllMetaNodes(patternNode))
       .find((node) => core.getAttribute(node, "name") === "Relation");
@@ -438,7 +432,8 @@ export class Pattern {
         return 0;
       });
 
-    const pattern = new Pattern();
+    const context = await GMEContext.fromNode(core, patternNode);
+    const pattern = new Pattern(context);
 
     const elementsByNodePath = {}; // mapping from node path to element
     await elementNodes.reduce(async (prev, node) => {
@@ -530,15 +525,21 @@ export class Pattern {
     return pattern;
   }
 
-  static getPatternChild(core: GmeClasses.Core, node: Core.Node): Core.Node {
+  /**
+   * Given a node follow the containment hierarchy until we reach the child of a pattern.
+   */
+  static getPatternChild(node: GMEContext): GMEContext {
     let child = node;
-    const isPatternType = (n: Core.Node) => {
-      const metaType = core.getAttribute(core.getBaseType(n), "name")
-        .toString();
-      return metaType.includes("Pattern") || metaType.includes("Structure");
+
+    const isPatternType = (n: GMEContext) => {
+      const baseType = n.getNode(n.data().pointers.base); // Follow all the way to the meta node?
+      const attr = baseType.data().attributes.name;
+      const typeName = attr?.String;
+      return typeName.includes("Pattern") || typeName.includes("Structure");
     };
-    while (child && !isPatternType(core.getParent(child))) {
-      child = core.getParent(child);
+
+    while (child && !isPatternType(child.getParent())) {
+      child = child.getParent();
     }
     return child;
   }
@@ -859,7 +860,7 @@ export enum Property {
   Value = "Value",
 }
 
-namespace Primitive {
+export namespace Primitive {
   export interface Primitive {}
 
   class String implements Primitive {
@@ -928,15 +929,111 @@ class Endpoint {
 }
 
 // TODO: can the index be implicit? Maybe the first one?
-export class GMEContext {
-  private nodes: GMENode[];
+// Should I make this more full-fledged? Like the rust version?
+export class GMEContext implements EngineSerializable {
+  nodes: GMENode[];
+  private index: NodeIndex;
+  private parentDict?: { [key: NodeIndex]: NodeIndex };
+  // TODO:
 
-  constructor(nodes: GMENode[]) {
+  constructor(nodes: GMENode[], index = 0) {
     this.nodes = nodes;
+    this.index = index;
   }
 
   getActiveNode(): GMENode {
     return this.nodes[0];
+  }
+
+  data(): GMENode {
+    return this.nodes[this.index];
+  }
+
+  loadByPath(path: NodePath): GMEContext | undefined {
+    return this.findNode((node) => node.id === path);
+  }
+
+  findNode(fn: (n: GMENode) => boolean): GMEContext {
+    const index = this.nodes.findIndex(fn);
+    if (index !== -1) {
+      return this.getNode(index);
+    }
+  }
+
+  getNode(index: NodeIndex): GMEContext {
+    return new GMEContext(this.nodes, index);
+  }
+
+  getParent(): GMEContext | undefined {
+    if (!this.parentDict) {
+      const parentEntries = this.nodes.flatMap((node, index) => {
+        return node.children.map((childIndex) => [childIndex, index]);
+      });
+      this.parentDict = Object.fromEntries(parentEntries);
+    }
+    const parentIndex = this.parentDict[this.index];
+    return parentIndex && this.getNode(parentIndex);
+  }
+
+  toEngineJSON(): any {
+    assert(this.index === 0);
+    return { nodes: this.nodes };
+  }
+
+  union(otherContext: GMEContext) {
+    // Create a context that contains all nodes in each
+    const nodes = this.nodes.slice();
+
+    // add the new nodes from otherContext to this list of nodes
+    const newNodes = otherContext.nodes.filter((node) =>
+      !nodes.find((existing) => existing.id === node.id)
+    ).map((node) => node.clone());
+
+    // update references for new nodes
+    newNodes.forEach((node) => {
+      node.updateReferences((idx) => {
+        const ref = otherContext.getNode(idx);
+        let nodeIdx = nodes.findIndex((node) => node.id === ref.data().id);
+        if (nodeIdx === -1) {
+          const relIndex = newNodes.findIndex((n) => n.id === ref.data().id);
+          assert(
+            relIndex > -1,
+            new Error("Could not find referenced node in other context."),
+          );
+          nodeIdx = nodes.length + relIndex;
+        }
+        return nodeIdx;
+      });
+    });
+
+    nodes.push(...newNodes);
+    return new GMEContext(nodes, this.index);
+  }
+
+  validate() {
+    const maxIndex = this.nodes.length - 1;
+    this.nodes.forEach((node) => {
+      const invalidChild = node.children.find((index) => index > maxIndex);
+      if (invalidChild) {
+        throw new InvalidChildError(node, invalidChild, maxIndex);
+      }
+
+      const invalidPtr = Object.entries(node.pointers).find(([_name, index]) =>
+        index > maxIndex
+      );
+      if (invalidPtr) {
+        throw new InvalidPointerError(node, ...invalidPtr, maxIndex);
+      }
+
+      const invalidSet = Object.entries(node.sets).find(([_name, idx]) =>
+        idx.some((index) => index > maxIndex)
+      );
+      if (invalidSet) {
+        const [name, members] = invalidSet;
+        const memberIndex = members.find((idx) => idx > maxIndex);
+        throw new InvalidSetError(node, name, memberIndex, maxIndex);
+      }
+    });
   }
 
   static async addNode(
@@ -1026,6 +1123,29 @@ export class GMENode {
 
   setActiveNode(isActive = true) {
     this.isActive = isActive;
+  }
+
+  updateReferences(fn: (idx: NodeIndex) => NodeIndex): void {
+    this.children = this.children.map(fn);
+    this.pointers = mapValues(
+      this.pointers,
+      fn,
+    );
+    this.sets = mapValues(
+      this.sets,
+      (indices) => indices.map(fn),
+    );
+  }
+
+  clone(): GMENode {
+    const copy = new GMENode(this.id, this.attributes);
+    copy.children = this.children.slice();
+    copy.pointers = clone(this.pointers);
+    copy.sets = clone(
+      this.sets,
+    );
+    copy.isActive = this.isActive;
+    return copy;
   }
 
   static async fromNode(core: GmeClasses.Core, node: Core.Node) {
@@ -1181,9 +1301,9 @@ interface SetRef {
 type CreatedNodeDict = { [nodePath: NodePath]: JsonNode };
 
 // FIXME: we should probably swap to WJI instead...
-class JsonNode {
+export class JsonNode {
   id: string;
-  attributes: { [key: string]: string }; // FIXME: better value type
+  attributes: { [key: string]: Primitive.Primitive };
   pointers: { [key: string]: string };
   children: JsonNode[];
   parent: JsonNode | undefined;
@@ -1194,4 +1314,59 @@ class JsonNode {
     this.pointers = {};
     this.children = [];
   }
+}
+
+function mapValues<T, O>(
+  obj: { [key: string]: T },
+  fn: (i: T) => O,
+): { [key: string]: O } {
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, fn(v)]));
+}
+
+export class ValidationError extends Error {}
+
+class InvalidIndexError extends ValidationError {
+  constructor(
+    node: GMENode,
+    name: string,
+    childIndex: NodeIndex,
+    maxIndex: NodeIndex,
+  ) {
+    const msg = `GMENode has invalid child index (max): ${childIndex}\n${
+      JSON.stringify(node, null, 2)
+    }`;
+    super(msg);
+  }
+}
+
+export class InvalidChildError extends InvalidIndexError {
+  constructor(node: GMENode, childIndex: NodeIndex, maxIndex: NodeIndex) {
+    super(node, "child", childIndex, maxIndex);
+  }
+}
+
+export class InvalidPointerError extends InvalidIndexError {
+  constructor(
+    node: GMENode,
+    pointer: string,
+    target: NodeIndex,
+    maxIndex: NodeIndex,
+  ) {
+    super(node, `pointer (${pointer})`, target, maxIndex);
+  }
+}
+
+export class InvalidSetError extends InvalidIndexError {
+  constructor(
+    node: GMENode,
+    set: string,
+    target: NodeIndex,
+    maxIndex: NodeIndex,
+  ) {
+    super(node, `set (${set})`, target, maxIndex);
+  }
+}
+
+function clone<T>(primitive: T): T {
+  return JSON.parse(JSON.stringify(primitive));
 }

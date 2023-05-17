@@ -172,6 +172,29 @@ describe("ModelTransformation", function () {
       assert.equal(allMembers.length, 2);
       assert(allMembers.every((index) => index > -1));
     });
+
+    describe("union", function () {
+      it("should not duplicate shared nodes", async function () {
+        // Set a pointer
+        const n1 = core.createNode({ parent: root, base: fco });
+        const n2 = core.createNode({ parent: root, base: fco });
+
+        // Convert to GME context and check that it has valid indices
+        const c1 = await GMEContext.fromNode(core, n1);
+        const c2 = await GMEContext.fromNode(core, n2);
+
+        assert(c1.nodes.length > 1);
+        assert.equal(c1.nodes.length, c2.nodes.length);
+
+        const combined = c1.union(c2);
+
+        // resolve fco to same node index
+        const ndata1 = combined.data();
+        const ndata2 = combined.findNode((node) => node.id === c2.data().id)
+          .data();
+        assert.equal(ndata1.pointers.base, ndata2.pointers.base);
+      });
+    });
   });
 
   describe("simple table example", function () {
@@ -196,6 +219,15 @@ describe("ModelTransformation", function () {
     it("should create rows as children", async function () {
       const [table] = outputNodes;
       table.children.every((node) => node.pointers.base === "/O");
+    });
+
+    it.skip("should generate same outputs using GME context", async function () {
+      const model = await getNodeByName("NodeWithTwoAttributes");
+      const context = await GMEContext.fromNode(core, model);
+      const node = await getNodeByName("AttributeTable");
+      const transformation = await Transformation.fromNode(core, node);
+      const outputs = await transformation.apply(context);
+      assert.deepEqual(outputs, outputNodes);
     });
 
     it("should create a single table", async function () {
