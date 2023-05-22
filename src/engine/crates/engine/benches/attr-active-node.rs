@@ -10,8 +10,7 @@ use webgme_pattern_engine::{
 };
 
 fn criterion_benchmark(c: &mut Criterion) {
-    // TODO: create 500 nodes
-    c.bench_function("find_assignments attr value on active node 500", |b| {
+    c.bench_function("find name of active node (of 500)", |b| {
         let mut graph = Graph::new();
         let attr = graph.add_node(Element::Attribute);
         let attr_name = graph.add_node(Element::Constant(Constant::Primitive(Primitive::String(
