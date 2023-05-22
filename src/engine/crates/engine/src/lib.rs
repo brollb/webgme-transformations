@@ -9,6 +9,7 @@ use std::collections::HashSet;
 pub use crate::core::Primitive;
 pub use assignment::{Assignment, Reference};
 use pattern::{Element, Node, Pattern, Relation};
+pub use petgraph;
 use petgraph::{graph::NodeIndex, visit::EdgeRef, Direction};
 
 fn get_valid_targets<'a>(
