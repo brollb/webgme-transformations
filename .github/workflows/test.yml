@@ -29,14 +29,14 @@ jobs:
           args: --manifest-path src/engine/Cargo.toml
 
       - name: Run benchmark
-        run: cd examples/criterion-rs && cargo +nightly bench -- --output-format bencher | tee output.txt
+        run: cd src/engine/crates/engine && cargo +nightly bench -- --output-format bencher | tee output.txt
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Rust Benchmark
           tool: 'cargo'
-          output-file-path: examples/criterion-rs/output.txt
+          output-file-path: src/engine/crates/engine/output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           # Show alert with commit comment on detecting possible performance regression
