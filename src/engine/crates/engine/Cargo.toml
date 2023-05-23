@@ -14,6 +14,9 @@ nonempty = { version = "0.8.1", features = ["serialize"] }
 [dev-dependencies]
 criterion = "0.4"
 
+[lib]
+bench = false
+
 [[bench]]
 name = "attr-active-node"
 harness = false
