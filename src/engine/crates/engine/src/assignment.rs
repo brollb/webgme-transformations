@@ -32,7 +32,7 @@ impl Assignment {
 
     fn sorted_entries(&self) -> Vec<(&NodeIndex, &Reference)> {
         let mut entries: Vec<_> = self.matches.iter().to_owned().collect();
-        entries.sort_unstable_by_key(|(k, v)| k.clone());
+        entries.sort_unstable_by_key(|(k, _v)| <&NodeIndex>::clone(k));
         entries
     }
 

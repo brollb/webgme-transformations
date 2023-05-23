@@ -46,13 +46,13 @@ fn get_valid_targets<'a>(
                 return Box::new(std::iter::empty());
             }
 
-            // If no parent, grab all descendents
+            // If no parent, grab all nodes
             let candidates = if let Some(parent) = parent {
                 parent.children().collect()
             } else {
-                let mut descendents: Vec<_> = top_node.all_nodes().collect();
-                descendents.push(top_node.clone());
-                descendents
+                let mut nodes: Vec<_> = top_node.all_nodes().collect();
+                nodes.push(top_node.clone());
+                nodes
             };
 
             Box::new(
@@ -96,7 +96,6 @@ fn get_valid_targets<'a>(
                 ),
             });
 
-            dbg!(&node_refs.clone().next(), &node);
             // FIXME: return error if multiple nodes are referenced?
             if node_refs.next().is_some() {
                 return Box::new(std::iter::empty());
@@ -104,14 +103,12 @@ fn get_valid_targets<'a>(
 
             // apply the constraints
             let candidates: Vec<_> = if let Some(node) = node {
-                println!(">>> node for attribute is {:?}", node);
                 node.data()
                     .attributes
                     .keys()
                     .map(|attr| (node.clone(), attr.clone()))
                     .collect()
             } else {
-                println!(">>> node for attribute is None");
                 let top_attrs = top_node
                     .data()
                     .attributes
@@ -147,7 +144,6 @@ fn get_valid_targets<'a>(
             let mut node_refs = edges.filter_map(|e| match e.weight() {
                 Relation::Has => {
                     let node_index = e.source();
-                    println!("has node ref in pattern");
                     assignment.matches.get(&node_index)
                 }
                 _ => None,
@@ -160,10 +156,6 @@ fn get_valid_targets<'a>(
                 ),
             });
 
-            dbg!(
-                &node_refs.clone().collect::<Vec<_>>(),
-                &node.as_ref().map(|n| n.data())
-            );
             if node_refs.next().is_some() {
                 return Box::new(std::iter::empty());
             }
@@ -177,16 +169,7 @@ fn get_valid_targets<'a>(
                 let top_ptrs = top_node
                     .pointers()
                     .map(|(pointer, _)| (top_node.clone(), pointer.clone()));
-                // Ix this really the top node?
-                println!("top node is {:?}", &top_node.data().id);
                 let desc_ptrs = top_node.all_nodes().flat_map(|node| {
-                    println!(
-                        "desc is {:?}. Base ptr: {:?}",
-                        &node.data().id,
-                        node.pointers()
-                            .find(|(n, _v)| n == &&gme::PointerName("base".into()))
-                            .map(|(_name, node)| node.data().id.clone())
-                    );
                     node.pointers()
                         .map(|(pointer, _)| (node.clone(), pointer.clone()))
                         .collect::<Vec<_>>()
@@ -196,7 +179,6 @@ fn get_valid_targets<'a>(
             };
 
             Box::new(candidates.into_iter().filter_map(move |(node, pointer)| {
-                println!("checking candidate: {:?}", node.data().id);
                 let gme_ref = Reference::Pointer(node.data().id.clone(), pointer);
                 if assignment.is_valid_target(pattern, top_node, element_idx, &gme_ref) {
                     Some(gme_ref)

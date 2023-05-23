@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use webgme_pattern_engine::{
-    find_assignments,
-    gme::{self, NodeId},
+    find_assignments, gme,
     pattern::{self, Constant, Element, Node, Property, Relation},
     petgraph::Graph,
     Primitive,
