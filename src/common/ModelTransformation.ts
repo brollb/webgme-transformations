@@ -1,5 +1,4 @@
 import { None, Option, Some } from "oxide.ts";
-export { None, Some } from "oxide.ts";
 
 //@ts-ignore
 import type from "webgme";
