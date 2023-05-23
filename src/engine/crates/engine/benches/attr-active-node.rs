@@ -45,7 +45,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             sets: HashMap::new(),
             children: Vec::new(),
         })
-        .chain((0..500).into_iter().map(|i| {
+        .chain((0..500).map(|i| {
             let attributes: HashMap<_, _> = [
                 (
                     gme::AttributeName(String::from("test")),
@@ -68,7 +68,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 base: None,
                 is_active: false,
                 is_meta: false,
-                attributes: HashMap::new(),
+                attributes,
                 pointers: HashMap::new(),
                 sets: HashMap::new(),
                 children: Vec::new(),
