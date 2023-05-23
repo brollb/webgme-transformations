@@ -4,9 +4,9 @@
 
 const testFixture = require("../globals");
 const assert = require("assert");
+const { Some } = require("oxide.ts");
 const {
   ModelTransformation: Transformation,
-  Some,
   Pattern,
   Property,
   AnyNode,
@@ -17,7 +17,7 @@ const {
   GMEContext,
   Relation,
 } = require(
-  "../../dist/common/index",
+  "../../dist/index",
 );
 
 describe("ModelTransformation", function () {
