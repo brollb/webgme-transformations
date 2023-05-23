@@ -8,6 +8,7 @@ use std::collections::HashSet;
 
 pub use crate::core::Primitive;
 pub use assignment::{Assignment, Reference};
+use log::{info, warn};
 use pattern::{Element, Node, Pattern, Relation};
 pub use petgraph;
 use petgraph::{graph::NodeIndex, visit::EdgeRef, Direction};
@@ -131,7 +132,7 @@ fn get_valid_targets<'a>(
                 if assignment.is_valid_target(pattern, top_node, element_idx, &gme_ref) {
                     Some(gme_ref)
                 } else {
-                    println!("target is invalid {:?}", &gme_ref);
+                    warn!("target is invalid {:?}", &gme_ref);
                     None
                 }
             }))
@@ -228,7 +229,6 @@ fn add_match_to_assignment(
     mut remaining_elements: Vec<NodeIndex>,
 ) -> Vec<Assignment> {
     // algorithm for finding all assignments:
-    println!("remaining_elements: {:?}", remaining_elements);
     let mut assignments: Vec<_> = Vec::new();
 
     //  - if no more nodes to assign, return [assignment]
@@ -244,7 +244,7 @@ fn add_match_to_assignment(
     let element_targets: Vec<_> =
         get_valid_targets(pattern, &partial_assignment, node, element_idx).collect();
 
-    println!(
+    info!(
         "Found {} element_targets for {:?}: {:?}",
         element_targets.len(),
         element_idx,
@@ -253,7 +253,7 @@ fn add_match_to_assignment(
 
     //      - create a new assignment with the element_target and recurse
     for element_target in element_targets {
-        println!("let's try {:?} for {:?}", &element_target, &element_idx);
+        info!("Assigning {:?} to {:?}", &element_idx, &element_target);
         let new_assignment = partial_assignment.with(element_idx, element_target);
         assignments.append(&mut add_match_to_assignment(
             node,

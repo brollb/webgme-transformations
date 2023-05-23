@@ -780,6 +780,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "derive_more",
+ "log",
  "nonempty",
  "petgraph",
  "serde",

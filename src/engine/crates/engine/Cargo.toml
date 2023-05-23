@@ -10,6 +10,7 @@ petgraph = { version = "0.6.0", features = ["serde-1"] }
 derive_more = "0.99.17"
 serde = { version = "1.0.137", features = ["derive", "rc"] }
 nonempty = { version = "0.8.1", features = ["serialize"] }
+log = "0.4.17"
 
 [dev-dependencies]
 criterion = "0.4"
