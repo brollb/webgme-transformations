@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1684873245712,
+  "lastUpdate": 1684873534015,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -189,6 +189,36 @@ window.BENCHMARK_DATA = {
             "name": "find name of active node (of 500)",
             "value": 4764,
             "range": "± 10",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "brian.broll@gmail.com",
+            "name": "Brian Broll",
+            "username": "brollb"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ebc0a2f4a071e11cc860a2ac00c33b829ea4a15c",
+          "message": "Merge pull request #30 from brollb/rm-oxide-re-export\n\nRemove Oxide.ts re-export",
+          "timestamp": "2023-05-23T15:21:10-05:00",
+          "tree_id": "719e93a39660f0204f160d6a4e5e810e35daa120",
+          "url": "https://github.com/brollb/webgme-transformations/commit/ebc0a2f4a071e11cc860a2ac00c33b829ea4a15c"
+        },
+        "date": 1684873532789,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 5696,
+            "range": "± 28",
             "unit": "ns/iter"
           }
         ]
