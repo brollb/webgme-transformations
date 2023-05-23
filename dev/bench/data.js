@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1684873122440,
+  "lastUpdate": 1684873245712,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -163,6 +163,32 @@ window.BENCHMARK_DATA = {
             "name": "find name of active node (of 500)",
             "value": 5446,
             "range": "± 25",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "brollb",
+            "username": "brollb"
+          },
+          "committer": {
+            "name": "brollb",
+            "username": "brollb"
+          },
+          "id": "05f0a578c1aaf2a9d2f2041925faae6e6a9a3a7e",
+          "message": "Remove Oxide.ts re-export",
+          "timestamp": "2023-04-11T21:21:33Z",
+          "url": "https://github.com/brollb/webgme-transformations/pull/30/commits/05f0a578c1aaf2a9d2f2041925faae6e6a9a3a7e"
+        },
+        "date": 1684873244706,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 4764,
+            "range": "± 10",
             "unit": "ns/iter"
           }
         ]
