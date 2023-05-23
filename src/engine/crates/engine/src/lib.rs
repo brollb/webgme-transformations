@@ -211,9 +211,23 @@ fn select_next_element(
     0
 }
 
+fn element_priority(pattern: &Pattern, index: &NodeIndex) -> i32 {
+    let element = pattern.graph.node_weight(*index).unwrap();
+    // Prioritize nodes before attributes
+    match element {
+        Element::Node(..) => 0,
+        Element::Attribute => 1,
+        Element::Pointer => 1,
+        _ => 2,
+    }
+}
+
 pub fn find_assignments(node: gme::NodeInContext, pattern: &Pattern) -> Vec<Assignment> {
-    let remaining_elements = pattern.reference_elements();
-    println!("Search order: {:?}", remaining_elements);
+    let mut remaining_elements = pattern.reference_elements();
+    info!("Search order: {:?}", remaining_elements);
+
+    remaining_elements.sort_unstable_by_key(|element| element_priority(pattern, element));
+
     let assignments: HashSet<_> =
         add_match_to_assignment(&node, pattern, Assignment::new(), remaining_elements)
             .into_iter()
