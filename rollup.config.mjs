@@ -20,9 +20,9 @@ const plugins = [
 
 export default [
   {
-    input: "src/common/index.ts",
+    input: "src/index.ts",
     output: {
-      file: "dist/common/index.js",
+      file: "dist/index.js",
       format: "umd",
       name: "GMETransformations",
     },
