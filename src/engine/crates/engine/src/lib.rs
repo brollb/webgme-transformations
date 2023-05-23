@@ -8,7 +8,9 @@ use std::collections::HashSet;
 
 pub use crate::core::Primitive;
 pub use assignment::{Assignment, Reference};
+use log::{info, warn};
 use pattern::{Element, Node, Pattern, Relation};
+pub use petgraph;
 use petgraph::{graph::NodeIndex, visit::EdgeRef, Direction};
 
 fn get_valid_targets<'a>(
@@ -45,13 +47,13 @@ fn get_valid_targets<'a>(
                 return Box::new(std::iter::empty());
             }
 
-            // If no parent, grab all descendents
+            // If no parent, grab all nodes
             let candidates = if let Some(parent) = parent {
                 parent.children().collect()
             } else {
-                let mut descendents: Vec<_> = top_node.all_nodes().collect();
-                descendents.push(top_node.clone());
-                descendents
+                let mut nodes: Vec<_> = top_node.all_nodes().collect();
+                nodes.push(top_node.clone());
+                nodes
             };
 
             Box::new(
@@ -95,7 +97,6 @@ fn get_valid_targets<'a>(
                 ),
             });
 
-            dbg!(&node_refs.clone().next(), &node);
             // FIXME: return error if multiple nodes are referenced?
             if node_refs.next().is_some() {
                 return Box::new(std::iter::empty());
@@ -103,14 +104,12 @@ fn get_valid_targets<'a>(
 
             // apply the constraints
             let candidates: Vec<_> = if let Some(node) = node {
-                println!(">>> node for attribute is {:?}", node);
                 node.data()
                     .attributes
                     .keys()
                     .map(|attr| (node.clone(), attr.clone()))
                     .collect()
             } else {
-                println!(">>> node for attribute is None");
                 let top_attrs = top_node
                     .data()
                     .attributes
@@ -133,7 +132,7 @@ fn get_valid_targets<'a>(
                 if assignment.is_valid_target(pattern, top_node, element_idx, &gme_ref) {
                     Some(gme_ref)
                 } else {
-                    println!("target is invalid {:?}", &gme_ref);
+                    warn!("target is invalid {:?}", &gme_ref);
                     None
                 }
             }))
@@ -146,7 +145,6 @@ fn get_valid_targets<'a>(
             let mut node_refs = edges.filter_map(|e| match e.weight() {
                 Relation::Has => {
                     let node_index = e.source();
-                    println!("has node ref in pattern");
                     assignment.matches.get(&node_index)
                 }
                 _ => None,
@@ -159,10 +157,6 @@ fn get_valid_targets<'a>(
                 ),
             });
 
-            dbg!(
-                &node_refs.clone().collect::<Vec<_>>(),
-                &node.as_ref().map(|n| n.data())
-            );
             if node_refs.next().is_some() {
                 return Box::new(std::iter::empty());
             }
@@ -176,16 +170,7 @@ fn get_valid_targets<'a>(
                 let top_ptrs = top_node
                     .pointers()
                     .map(|(pointer, _)| (top_node.clone(), pointer.clone()));
-                // Ix this really the top node?
-                println!("top node is {:?}", &top_node.data().id);
                 let desc_ptrs = top_node.all_nodes().flat_map(|node| {
-                    println!(
-                        "desc is {:?}. Base ptr: {:?}",
-                        &node.data().id,
-                        node.pointers()
-                            .find(|(n, _v)| n == &&gme::PointerName("base".into()))
-                            .map(|(_name, node)| node.data().id.clone())
-                    );
                     node.pointers()
                         .map(|(pointer, _)| (node.clone(), pointer.clone()))
                         .collect::<Vec<_>>()
@@ -195,7 +180,6 @@ fn get_valid_targets<'a>(
             };
 
             Box::new(candidates.into_iter().filter_map(move |(node, pointer)| {
-                println!("checking candidate: {:?}", node.data().id);
                 let gme_ref = Reference::Pointer(node.data().id.clone(), pointer);
                 if assignment.is_valid_target(pattern, top_node, element_idx, &gme_ref) {
                     Some(gme_ref)
@@ -227,9 +211,23 @@ fn select_next_element(
     0
 }
 
+fn element_priority(pattern: &Pattern, index: &NodeIndex) -> i32 {
+    let element = pattern.graph.node_weight(*index).unwrap();
+    // Prioritize nodes before attributes
+    match element {
+        Element::Node(..) => 0,
+        Element::Attribute => 1,
+        Element::Pointer => 1,
+        _ => 2,
+    }
+}
+
 pub fn find_assignments(node: gme::NodeInContext, pattern: &Pattern) -> Vec<Assignment> {
-    let remaining_elements = pattern.reference_elements();
-    println!("Search order: {:?}", remaining_elements);
+    let mut remaining_elements = pattern.reference_elements();
+    info!("Search order: {:?}", remaining_elements);
+
+    remaining_elements.sort_unstable_by_key(|element| element_priority(pattern, element));
+
     let assignments: HashSet<_> =
         add_match_to_assignment(&node, pattern, Assignment::new(), remaining_elements)
             .into_iter()
@@ -245,7 +243,6 @@ fn add_match_to_assignment(
     mut remaining_elements: Vec<NodeIndex>,
 ) -> Vec<Assignment> {
     // algorithm for finding all assignments:
-    println!("remaining_elements: {:?}", remaining_elements);
     let mut assignments: Vec<_> = Vec::new();
 
     //  - if no more nodes to assign, return [assignment]
@@ -261,7 +258,7 @@ fn add_match_to_assignment(
     let element_targets: Vec<_> =
         get_valid_targets(pattern, &partial_assignment, node, element_idx).collect();
 
-    println!(
+    info!(
         "Found {} element_targets for {:?}: {:?}",
         element_targets.len(),
         element_idx,
@@ -270,7 +267,7 @@ fn add_match_to_assignment(
 
     //      - create a new assignment with the element_target and recurse
     for element_target in element_targets {
-        println!("let's try {:?} for {:?}", &element_target, &element_idx);
+        info!("Assigning {:?} to {:?}", &element_idx, &element_target);
         let new_assignment = partial_assignment.with(element_idx, element_target);
         assignments.append(&mut add_match_to_assignment(
             node,

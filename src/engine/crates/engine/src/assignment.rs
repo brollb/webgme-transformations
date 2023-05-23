@@ -32,7 +32,7 @@ impl Assignment {
 
     fn sorted_entries(&self) -> Vec<(&NodeIndex, &Reference)> {
         let mut entries: Vec<_> = self.matches.iter().to_owned().collect();
-        entries.sort_unstable_by_key(|(k, v)| k.clone());
+        entries.sort_unstable_by_key(|(k, _v)| <&NodeIndex>::clone(k));
         entries
     }
 
@@ -103,7 +103,6 @@ impl Assignment {
                     .matches
                     .get(index)
                     .map(|other_ref| {
-                        println!("=== found Has relation");
                         let (node_ref, attr_ref) = match dir {
                             Direction::Incoming => (other_ref, gme_ref),
                             Direction::Outgoing => (gme_ref, other_ref),
@@ -112,7 +111,6 @@ impl Assignment {
                             Reference::Node(node_id) => top_node.find_with_id(node_id),
                             _ => unreachable!(),
                         };
-                        println!("=== {:?}", node.data());
                         match attr_ref {
                             Reference::Attribute(node_id, attr_name) => {
                                 node_id == &node.data().id
@@ -165,12 +163,6 @@ impl Assignment {
         gme_ref: &Reference,
         gme_ref_prop: &Property,
     ) -> Primitive {
-        println!(
-            "---> {:?} {:?} {:?}",
-            &top_node.data().id,
-            gme_ref,
-            gme_ref_prop
-        );
         match (gme_ref, gme_ref_prop) {
             (Reference::Attribute(_node_id, attr), Property::Name) => {
                 Primitive::String(attr.0.clone())
@@ -184,12 +176,6 @@ impl Assignment {
             }
             (Reference::Pointer(node_id, name), Property::Value) => {
                 let node = top_node.find_with_id(node_id);
-                println!(
-                    "find {:?} from {:?}: {:?}",
-                    node_id,
-                    &top_node.data().id,
-                    node.data().id
-                );
                 let target = node
                     .pointers()
                     .find(|(pointer, _target)| pointer == &name)
