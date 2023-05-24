@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1684910201451,
+  "lastUpdate": 1684911313081,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -301,6 +301,36 @@ window.BENCHMARK_DATA = {
             "name": "find name of active node (of 500)",
             "value": 4348,
             "range": "± 17",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "brian.broll@gmail.com",
+            "name": "Brian Broll",
+            "username": "brollb"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a649b59f18bca8e6d9b91f2e8e19532de10da16c",
+          "message": "Merge pull request #32 from brollb/update-main-file\n\nUpdate main file to dist/index.js",
+          "timestamp": "2023-05-24T01:51:02-05:00",
+          "tree_id": "edc767ca47568d6a92aff3fdf4e174e77c6b97a5",
+          "url": "https://github.com/brollb/webgme-transformations/commit/a649b59f18bca8e6d9b91f2e8e19532de10da16c"
+        },
+        "date": 1684911311699,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 5286,
+            "range": "± 183",
             "unit": "ns/iter"
           }
         ]
