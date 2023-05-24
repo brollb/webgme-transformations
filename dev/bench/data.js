@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1684873850174,
+  "lastUpdate": 1684910201451,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -275,6 +275,32 @@ window.BENCHMARK_DATA = {
             "name": "find name of active node (of 500)",
             "value": 5708,
             "range": "± 208",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "brollb",
+            "username": "brollb"
+          },
+          "committer": {
+            "name": "brollb",
+            "username": "brollb"
+          },
+          "id": "3076bdc66342267cdb03e630fcaa849c22e813f6",
+          "message": "Update main file to dist/index.js",
+          "timestamp": "2023-04-11T21:21:33Z",
+          "url": "https://github.com/brollb/webgme-transformations/pull/32/commits/3076bdc66342267cdb03e630fcaa849c22e813f6"
+        },
+        "date": 1684910200053,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 4348,
+            "range": "± 17",
             "unit": "ns/iter"
           }
         ]
