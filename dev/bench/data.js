@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1684911329711,
+  "lastUpdate": 1684911683608,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -357,6 +357,36 @@ window.BENCHMARK_DATA = {
             "name": "find name of active node (of 500)",
             "value": 4357,
             "range": "± 17",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "brian.broll@gmail.com",
+            "name": "Brian Broll",
+            "username": "brollb"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2283f091616700724185f0dc2a8ea7954b7cfe1f",
+          "message": "Merge pull request #33 from brollb/bump-v0.5.1\n\nBump version to v0.5.1",
+          "timestamp": "2023-05-24T01:56:50-05:00",
+          "tree_id": "5d9ffc959879f631b8333eade9827dbc9e3b01f1",
+          "url": "https://github.com/brollb/webgme-transformations/commit/2283f091616700724185f0dc2a8ea7954b7cfe1f"
+        },
+        "date": 1684911681177,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 5226,
+            "range": "± 15",
             "unit": "ns/iter"
           }
         ]
