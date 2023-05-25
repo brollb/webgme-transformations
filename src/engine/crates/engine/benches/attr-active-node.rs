@@ -77,6 +77,67 @@ fn criterion_benchmark(c: &mut Criterion) {
         let gme_node = gme::NodeInContext::from_vec(nodes.collect()).unwrap();
         b.iter(|| find_assignments(black_box(gme_node.clone()), black_box(&pattern)))
     });
+
+    c.bench_function("find child of active node (tree w/ 1500 nodes)", |b| {
+        let mut graph = Graph::new();
+        let child = graph.add_node(Element::Node(Node::AnyNode));
+        let active = graph.add_node(Element::Node(Node::ActiveNode));
+        graph.add_edge(child, active, Relation::ChildOf);
+
+        let pattern = pattern::Pattern::new(graph);
+
+        // Build up a large tree of nodes
+        let other_nodes = (0..100).flat_map(|i| {
+            let child_ids = (1..100).map(move |j| gme::NodeId::new(format!("/n{}/{}", i, j)));
+            let child_idx = (1..100).map(move |j| gme::NodeIndex(100 * i + j));
+
+            let parent = gme::Node {
+                id: gme::NodeId::new(format!("/n{}", i)),
+                base: None,
+                is_active: false,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: child_idx.collect(),
+            };
+            std::iter::once(parent).chain(child_ids.map(|id| gme::Node {
+                id,
+                base: None,
+                is_active: false,
+                is_meta: false,
+                attributes: HashMap::new(),
+                pointers: HashMap::new(),
+                sets: HashMap::new(),
+                children: Vec::new(),
+            }))
+        });
+        let target_child_idx = gme::NodeIndex(10_001);
+        let target_nodes = std::iter::once(gme::Node {
+            id: gme::NodeId::new("/target".into()),
+            base: None,
+            is_active: true,
+            is_meta: false,
+            attributes: HashMap::new(),
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: vec![target_child_idx],
+        })
+        .chain(std::iter::once(gme::Node {
+            id: gme::NodeId::new("/target/child".into()),
+            base: None,
+            is_active: false,
+            is_meta: false,
+            attributes: HashMap::new(),
+            pointers: HashMap::new(),
+            sets: HashMap::new(),
+            children: Vec::new(),
+        }));
+
+        let nodes: Vec<_> = other_nodes.chain(target_nodes).collect();
+        let gme_node = gme::NodeInContext::from_vec(nodes).unwrap();
+        b.iter(|| find_assignments(black_box(gme_node.clone()), black_box(&pattern)))
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);
