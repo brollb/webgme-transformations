@@ -4,7 +4,11 @@ mod error;
 pub mod gme;
 pub mod pattern;
 
-use std::collections::HashSet;
+use std::{
+    cmp::Ordering,
+    collections::{HashSet, VecDeque},
+    matches,
+};
 
 pub use crate::core::Primitive;
 pub use assignment::{Assignment, Reference};
@@ -192,45 +196,107 @@ fn get_valid_targets<'a>(
     }
 }
 
-type ElementIndex = usize;
-fn select_next_element(
-    _pattern: &Pattern,
-    _assignment: &Assignment,
-    _remaining_elements: &[NodeIndex],
-) -> ElementIndex {
-    // TODO: Find the element with the most connections to assigned elements
-    // TODO: Use total edge count as a tie-breaker
-    // TODO: Prioritize nodes that are the target of a ChildOf relation?
-    // TODO: this could be a toposort step before this entire function
-    // we should be able to prioritize the sort using the following criteria:
-    //   - active node(s)
-    //   - ChildOf edges (to selected indices, then generally)
-    //   - other edges (to selected indices, then generally)
-
-    // TODO: If we keep swap_remove, we will need this to be [1, n, n-1, ..., 3, 2] order
-    0
+#[derive(Eq, PartialEq, Debug)]
+struct Priority {
+    is_active: bool,
+    is_node: bool,
+    num_constraints: usize, // edges to assigned elements
+    num_edges: usize,
 }
 
-fn element_priority(pattern: &Pattern, index: &NodeIndex) -> i32 {
-    let element = pattern.graph.node_weight(*index).unwrap();
-    // Prioritize nodes before attributes
-    match element {
-        Element::Node(Node::ActiveNode) => 0,
-        Element::Node(..) => 1,
-        Element::Attribute => 2,
-        Element::Pointer => 2,
-        _ => 3,
+impl Priority {
+    fn new(is_active: bool, is_node: bool, num_constraints: usize, num_edges: usize) -> Self {
+        Self {
+            is_active,
+            is_node,
+            num_constraints,
+            num_edges,
+        }
     }
 }
 
-pub fn find_assignments(node: gme::NodeInContext, pattern: &Pattern) -> Vec<Assignment> {
-    let mut remaining_elements = pattern.reference_elements();
-    info!("Search order: {:?}", remaining_elements);
+impl Ord for Priority {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.is_active != other.is_active {
+            self.is_active.cmp(&other.is_active)
+        } else if self.is_node != other.is_node {
+            self.is_node.cmp(&other.is_node)
+        } else if self.num_constraints != other.num_constraints {
+            self.num_constraints.cmp(&other.num_constraints)
+        } else {
+            self.num_edges.cmp(&other.num_edges)
+        }
+    }
+}
 
-    remaining_elements.sort_unstable_by_key(|element| element_priority(pattern, element));
+impl PartialOrd for Priority {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn element_priority(
+    pattern: &Pattern,
+    assigned: &HashSet<NodeIndex>,
+    index: &NodeIndex,
+) -> Priority {
+    let element = pattern.graph.node_weight(*index).unwrap();
+    let is_active = matches!(element, Element::Node(Node::ActiveNode));
+    let is_node = matches!(element, Element::Node(..));
+
+    // Prioritize nodes before attributes
+    // prioritize constrained nodes, attributes
+    // For all the nodes, check if they have been added
+    // algorithm:
+    //   - for each element, compute priority
+    //   - add the element with the max to the ordered list
+    //   - repeat until all elements removed from the list
+    // priority:
+    //   - active node
+    //   - node > attribute/pointer
+    //   - edges to assigned elements
+    //   - # of edges
+
+    let num_edges = pattern.graph.neighbors(*index).count();
+    let num_constraints = pattern
+        .graph
+        .neighbors(*index)
+        .filter(|n_index| assigned.contains(n_index))
+        .count();
+
+    Priority::new(is_active, is_node, num_constraints, num_edges)
+}
+
+fn element_search_queue(pattern: &Pattern) -> VecDeque<NodeIndex> {
+    let mut remaining_elements = pattern.reference_elements();
+    let mut ordered = VecDeque::with_capacity(remaining_elements.len());
+    let mut assigned: HashSet<_> = pattern
+        .graph
+        .node_indices()
+        .filter(|id| matches!(pattern.graph[*id], Element::Constant(_)))
+        .collect();
+
+    while !remaining_elements.is_empty() {
+        let (i, _) = remaining_elements
+            .iter()
+            .enumerate()
+            .max_by_key(|(_index, element)| element_priority(pattern, &assigned, element))
+            .unwrap();
+
+        let element = remaining_elements.swap_remove(i);
+        ordered.push_back(element);
+        assigned.insert(element);
+    }
+
+    ordered
+}
+
+pub fn find_assignments(node: gme::NodeInContext, pattern: &Pattern) -> Vec<Assignment> {
+    let elements = element_search_queue(pattern);
+    info!("Search order: {:?}", elements);
 
     let assignments: HashSet<_> =
-        add_match_to_assignment(&node, pattern, Assignment::new(), remaining_elements)
+        add_match_to_assignment(&node, pattern, Assignment::new(), elements)
             .into_iter()
             .collect();
 
@@ -241,7 +307,7 @@ fn add_match_to_assignment(
     node: &gme::NodeInContext,
     pattern: &Pattern,
     partial_assignment: Assignment,
-    mut remaining_elements: Vec<NodeIndex>,
+    mut remaining_elements: VecDeque<NodeIndex>,
 ) -> Vec<Assignment> {
     // algorithm for finding all assignments:
     let mut assignments: Vec<_> = Vec::new();
@@ -251,9 +317,8 @@ fn add_match_to_assignment(
         return vec![partial_assignment];
     }
 
-    //  - select an unassigned pattern element: (most connections to resolved nodes?)
-    let idx = select_next_element(pattern, &partial_assignment, &remaining_elements);
-    let element_idx = remaining_elements.swap_remove(idx);
+    //  - get the next element
+    let element_idx = remaining_elements.pop_front().unwrap();
 
     //    - for each candidate for the pattern element:
     let element_targets: Vec<_> =
