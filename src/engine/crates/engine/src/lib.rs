@@ -215,10 +215,11 @@ fn element_priority(pattern: &Pattern, index: &NodeIndex) -> i32 {
     let element = pattern.graph.node_weight(*index).unwrap();
     // Prioritize nodes before attributes
     match element {
-        Element::Node(..) => 0,
-        Element::Attribute => 1,
-        Element::Pointer => 1,
-        _ => 2,
+        Element::Node(Node::ActiveNode) => 0,
+        Element::Node(..) => 1,
+        Element::Attribute => 2,
+        Element::Pointer => 2,
+        _ => 3,
     }
 }
 
