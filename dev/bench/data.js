@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1685046034843,
+  "lastUpdate": 1685048876161,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -487,6 +487,42 @@ window.BENCHMARK_DATA = {
             "name": "find child of active node (tree w/ 1500 nodes)",
             "value": 263912,
             "range": "± 17163",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "brian.broll@gmail.com",
+            "name": "Brian Broll",
+            "username": "brollb"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e65d660604cde3b2ef08207f7e16c6b00b0e87ed",
+          "message": "Merge pull request #35 from brollb/better-search-order\n\nImprove search to consider constraints, active nodes, etc",
+          "timestamp": "2023-05-25T16:04:05-05:00",
+          "tree_id": "b074fcc943b220a346b8302e99fdf0367bdef6ab",
+          "url": "https://github.com/brollb/webgme-transformations/commit/e65d660604cde3b2ef08207f7e16c6b00b0e87ed"
+        },
+        "date": 1685048875133,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 4624,
+            "range": "± 15",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "find child of active node (tree w/ 1500 nodes)",
+            "value": 213699,
+            "range": "± 4246",
             "unit": "ns/iter"
           }
         ]
