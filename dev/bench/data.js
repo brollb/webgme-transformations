@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1685562261973,
+  "lastUpdate": 1692280436185,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -591,6 +591,38 @@ window.BENCHMARK_DATA = {
             "name": "find child of active node (tree w/ 1500 nodes)",
             "value": 243632,
             "range": "± 10577",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "brollb",
+            "username": "brollb"
+          },
+          "committer": {
+            "name": "brollb",
+            "username": "brollb"
+          },
+          "id": "8ba4f3c40a238b3cbb90ab33a6b2129bfb5af38d",
+          "message": "fix small linting issues",
+          "timestamp": "2023-04-11T21:21:33Z",
+          "url": "https://github.com/brollb/webgme-transformations/pull/37/commits/8ba4f3c40a238b3cbb90ab33a6b2129bfb5af38d"
+        },
+        "date": 1692280434558,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 6127,
+            "range": "± 25",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "find child of active node (tree w/ 1500 nodes)",
+            "value": 238538,
+            "range": "± 777",
             "unit": "ns/iter"
           }
         ]
