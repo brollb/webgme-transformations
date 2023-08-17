@@ -86,17 +86,12 @@ impl From<GMENode> for gme::Node {
                 (pointer, node_index)
             })
             .collect();
-        let children: Vec<_> = node
-            .children
-            .into_iter()
-            .map(|index| gme::NodeIndex(index))
-            .collect();
+        let children: Vec<_> = node.children.into_iter().map(gme::NodeIndex).collect();
         let sets: HashMap<_, _> = node
             .sets
             .into_iter()
             .map(|(name, idx)| {
-                let indices: HashSet<_> =
-                    idx.into_iter().map(|index| gme::NodeIndex(index)).collect();
+                let indices: HashSet<_> = idx.into_iter().map(gme::NodeIndex).collect();
                 (gme::SetName(name), indices)
             })
             .collect();
