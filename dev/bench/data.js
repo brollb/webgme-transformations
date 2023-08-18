@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1692367731259,
+  "lastUpdate": 1692368703027,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -655,6 +655,42 @@ window.BENCHMARK_DATA = {
             "name": "find child of active node (tree w/ 1500 nodes)",
             "value": 244276,
             "range": "± 1041",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "brian.broll@gmail.com",
+            "name": "Brian Broll",
+            "username": "brollb"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f23ed3ea65c349bd7dd0437f1833c4184ec0dd47",
+          "message": "Merge pull request #37 from brollb/linting-issues\n\nfix small linting issues",
+          "timestamp": "2023-08-18T09:22:08-05:00",
+          "tree_id": "9896ce4c8481bd2b6e7c92f9614a9687518c54d6",
+          "url": "https://github.com/brollb/webgme-transformations/commit/f23ed3ea65c349bd7dd0437f1833c4184ec0dd47"
+        },
+        "date": 1692368702220,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 6611,
+            "range": "± 405",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "find child of active node (tree w/ 1500 nodes)",
+            "value": 262508,
+            "range": "± 13674",
             "unit": "ns/iter"
           }
         ]
