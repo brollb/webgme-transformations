@@ -17,7 +17,7 @@
     "clean_up": "node ./node_modules/webgme-engine/src/bin/clean_up.js",
     "prepare": "npm run build"
   },
-  "version": "0.5.1",
+  "version": "0.6.0",
   "peerDependencies": {
     "webgme": "^2.24.0"
   },
