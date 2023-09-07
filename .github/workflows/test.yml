@@ -52,10 +52,10 @@ jobs:
       - name: "Checkout Branch"
         uses: actions/checkout@v3
 
-      - name: "Use Node.js LTS"
+      - name: "Setup Node.js"
         uses: actions/setup-node@v3
         with:
-          node-version: "lts"
+          node-version: "latest"
 
       - name: "Start MongoDB"
         uses: supercharge/mongodb-github-action@1.8.0
