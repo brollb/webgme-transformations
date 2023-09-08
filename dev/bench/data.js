@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1694101417530,
+  "lastUpdate": 1694210764285,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -787,6 +787,42 @@ window.BENCHMARK_DATA = {
             "name": "find child of active node (tree w/ 1500 nodes)",
             "value": 204514,
             "range": "± 408",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "brian.broll@gmail.com",
+            "name": "Brian Broll",
+            "username": "brollb"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "42fc64ad0a29165e13a19c35a0c43864a8dc1583",
+          "message": "Merge pull request #39 from brollb/use-node-lts\n\nSwitch gh actions to node LTS",
+          "timestamp": "2023-09-08T17:03:43-05:00",
+          "tree_id": "fec1f3a7ae8e1570210aa670d3c8a1f0b7f81117",
+          "url": "https://github.com/brollb/webgme-transformations/commit/42fc64ad0a29165e13a19c35a0c43864a8dc1583"
+        },
+        "date": 1694210763535,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 5545,
+            "range": "± 32",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "find child of active node (tree w/ 1500 nodes)",
+            "value": 196101,
+            "range": "± 281",
             "unit": "ns/iter"
           }
         ]
