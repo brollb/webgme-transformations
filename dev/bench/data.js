@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1715796834668,
+  "lastUpdate": 1715796951458,
   "repoUrl": "https://github.com/brollb/webgme-transformations",
   "entries": {
     "Rust Benchmark": [
@@ -855,6 +855,42 @@ window.BENCHMARK_DATA = {
             "name": "find child of active node (tree w/ 1500 nodes)",
             "value": 110549,
             "range": "± 3250",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "brian.broll@gmail.com",
+            "name": "Brian Broll",
+            "username": "brollb"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b67bf654b42ff1405806253d2b1e5fee1138db5d",
+          "message": "Merge pull request #38 from brollb/brollb-patch-1\n\nAdd benchmarks link to readme",
+          "timestamp": "2024-05-15T13:14:12-05:00",
+          "tree_id": "0324824b7b39ca3654c1c3bae85c463cb904691d",
+          "url": "https://github.com/brollb/webgme-transformations/commit/b67bf654b42ff1405806253d2b1e5fee1138db5d"
+        },
+        "date": 1715796950603,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "find name of active node (of 500)",
+            "value": 3236,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "find child of active node (tree w/ 1500 nodes)",
+            "value": 110191,
+            "range": "± 2606",
             "unit": "ns/iter"
           }
         ]
