@@ -3,6 +3,8 @@
 This is an experimental transformation language for defining model
 transformations within WebGME.
 
+Benchmarks: https://brollb.github.io/webgme-transformations/dev/bench/
+
 ## Overview
 
 This contains a model transformation language as a metamodel and the
